@@ -1,5 +1,6 @@
-// Draws the README's example images from scratch: a made-up desktop, made-up apps and generic symbol icons.
-// Nothing is captured from a real screen.
+// Draws the README's example images: a mock desktop with macOS's built-in app icons (Safari, Mail, …, read
+// from the system, identical on every Mac). Window contents are made up; nothing is captured from a real screen.
+// App icons and the Apple logo are Apple's trademarks and artwork.
 // Usage: swift docs/make_media.swift docs/images
 import AppKit
 import CoreImage
@@ -11,21 +12,30 @@ try? FileManager.default.createDirectory(atPath: outDir, withIntermediateDirecto
 
 // MARK: - Mock apps
 
-struct MockApp { let name: String; let symbol: String; let top: NSColor; let bottom: NSColor; var glyph: NSColor = .white }
+struct MockApp {
+    let name: String; let symbol: String; let top: NSColor; let bottom: NSColor; var glyph: NSColor = .white
+    var path: String? = nil
+    /// The real app icon from the system, if this Mac has the app; otherwise a drawn stand-in is used.
+    var icon: NSImage? {
+        // Resolve links first (Safari's /Applications entry is one), or macOS adds a shortcut-arrow badge.
+        guard let p = path.map({ ($0 as NSString).resolvingSymlinksInPath }), FileManager.default.fileExists(atPath: p) else { return nil }
+        return NSWorkspace.shared.icon(forFile: p)
+    }
+}
 func rgb(_ r: Int, _ g: Int, _ b: Int, _ a: CGFloat = 1) -> NSColor {
     NSColor(srgbRed: CGFloat(r) / 255, green: CGFloat(g) / 255, blue: CGFloat(b) / 255, alpha: a)
 }
 
-let browser = MockApp(name: "Browser", symbol: "globe", top: rgb(80, 150, 250), bottom: rgb(30, 95, 215))
-let mail = MockApp(name: "Mail", symbol: "envelope.fill", top: rgb(70, 185, 255), bottom: rgb(15, 115, 235))
-let notes = MockApp(name: "Notes", symbol: "note.text", top: rgb(255, 222, 95), bottom: rgb(245, 175, 35))
-let photos = MockApp(name: "Photos", symbol: "photo.fill", top: rgb(255, 135, 160), bottom: rgb(225, 65, 125))
-let music = MockApp(name: "Music", symbol: "music.note", top: rgb(255, 100, 110), bottom: rgb(215, 45, 75))
-let terminal = MockApp(name: "Terminal", symbol: "terminal.fill", top: rgb(85, 85, 95), bottom: rgb(35, 35, 42))
-let calendar = MockApp(name: "Calendar", symbol: "calendar", top: rgb(255, 255, 255), bottom: rgb(220, 220, 226), glyph: rgb(230, 60, 60))
-let chat = MockApp(name: "Chat", symbol: "message.fill", top: rgb(95, 220, 130), bottom: rgb(35, 165, 85))
-let files = MockApp(name: "Files", symbol: "folder.fill", top: rgb(120, 200, 255), bottom: rgb(65, 145, 235))
-let maps = MockApp(name: "Maps", symbol: "map.fill", top: rgb(130, 210, 150), bottom: rgb(65, 155, 105))
+let browser = MockApp(name: "Safari", symbol: "safari", top: rgb(80, 150, 250), bottom: rgb(30, 95, 215), path: "/Applications/Safari.app")
+let mail = MockApp(name: "Mail", symbol: "envelope.fill", top: rgb(70, 185, 255), bottom: rgb(15, 115, 235), path: "/System/Applications/Mail.app")
+let notes = MockApp(name: "Notes", symbol: "note.text", top: rgb(255, 222, 95), bottom: rgb(245, 175, 35), path: "/System/Applications/Notes.app")
+let photos = MockApp(name: "Photos", symbol: "photo.fill", top: rgb(255, 135, 160), bottom: rgb(225, 65, 125), path: "/System/Applications/Photos.app")
+let music = MockApp(name: "Music", symbol: "music.note", top: rgb(255, 100, 110), bottom: rgb(215, 45, 75), path: "/System/Applications/Music.app")
+let terminal = MockApp(name: "Terminal", symbol: "terminal.fill", top: rgb(85, 85, 95), bottom: rgb(35, 35, 42), path: "/System/Applications/Utilities/Terminal.app")
+let calendar = MockApp(name: "Calendar", symbol: "calendar", top: rgb(255, 255, 255), bottom: rgb(220, 220, 226), glyph: rgb(230, 60, 60), path: "/System/Applications/Calendar.app")
+let chat = MockApp(name: "Messages", symbol: "message.fill", top: rgb(95, 220, 130), bottom: rgb(35, 165, 85), path: "/System/Applications/Messages.app")
+let files = MockApp(name: "Finder", symbol: "folder.fill", top: rgb(120, 200, 255), bottom: rgb(65, 145, 235), path: "/System/Library/CoreServices/Finder.app")
+let maps = MockApp(name: "Maps", symbol: "map.fill", top: rgb(130, 210, 150), bottom: rgb(65, 155, 105), path: "/System/Applications/Maps.app")
 let allApps = [browser, mail, notes, photos, music, terminal, calendar, chat, files, maps]
 
 // MARK: - Drawing helpers
@@ -33,6 +43,10 @@ let allApps = [browser, mail, notes, photos, music, terminal, calendar, chat, fi
 func rounded(_ r: NSRect, _ radius: CGFloat) -> NSBezierPath { NSBezierPath(roundedRect: r, xRadius: radius, yRadius: radius) }
 
 func drawIcon(_ app: MockApp, in r: NSRect) {
+    if let img = app.icon {
+        img.draw(in: r, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: [.interpolation: NSImageInterpolation.high])
+        return
+    }
     let path = rounded(r, r.width * 0.225)
     NSGraphicsContext.saveGraphicsState()
     let sh = NSShadow(); sh.shadowBlurRadius = r.width * 0.06; sh.shadowOffset = NSSize(width: 0, height: -r.width * 0.03)
@@ -83,20 +97,37 @@ func blurred(_ image: CGImage, radius: CGFloat) -> CGImage {
 enum Front { case browser, notes }
 
 func drawDesktop(_ canvas: NSSize, front: Front) {
-    // Wallpaper
-    NSGradient(colors: [rgb(64, 110, 190), rgb(120, 96, 190), rgb(232, 140, 160)])!
-        .draw(in: NSRect(origin: .zero, size: canvas), angle: -55)
-    // Menu bar
-    let mb = NSRect(x: 0, y: canvas.height - 24, width: canvas.width, height: 24)
-    rgb(255, 255, 255, 0.55).setFill(); mb.fill()
-    let appName = front == .browser ? "Browser" : "Notes"
-    text(appName, in: NSRect(x: 16, y: mb.minY + 4, width: 80, height: 16), size: 12.5, weight: .bold, color: rgb(20, 20, 25))
-    var x: CGFloat = 16 + (front == .browser ? 62 : 50)
-    for item in ["File", "Edit", "View", "Window", "Help"] {
-        text(item, in: NSRect(x: x, y: mb.minY + 4, width: 60, height: 16), size: 12.5, color: rgb(20, 20, 25))
-        x += CGFloat(item.count) * 7.5 + 16
+    drawWallpaper(canvas)
+    // Menu bar: translucent, Apple logo, bold app name, menus, status icons and the clock.
+    let mb = NSRect(x: 0, y: canvas.height - 25, width: canvas.width, height: 25)
+    rgb(255, 255, 255, 0.45).setFill(); mb.fill()
+    let ink = rgb(15, 15, 20)
+    func symbol(_ name: String, x: CGFloat, size: CGFloat = 13, weight: NSFont.Weight = .regular) -> CGFloat {
+        let cfg = NSImage.SymbolConfiguration(pointSize: size, weight: weight).applying(.init(paletteColors: [ink]))
+        guard let img = NSImage(systemSymbolName: name, accessibilityDescription: nil)?.withSymbolConfiguration(cfg) else { return 0 }
+        img.draw(in: NSRect(x: x, y: mb.midY - img.size.height / 2, width: img.size.width, height: img.size.height))
+        return img.size.width
     }
-    text("Fri 10:12", in: NSRect(x: canvas.width - 90, y: mb.minY + 4, width: 76, height: 16), size: 12.5, color: rgb(20, 20, 25), align: .right)
+    _ = symbol("apple.logo", x: 16, size: 14, weight: .medium)
+    let appName = front == .browser ? "Safari" : "Notes"
+    let font = NSFont.systemFont(ofSize: 13)
+    var x: CGFloat = 46
+    for (i, item) in ([appName] + ["File", "Edit", "View", front == .browser ? "History" : "Format", "Window", "Help"]).enumerated() {
+        let f = i == 0 ? NSFont.systemFont(ofSize: 13, weight: .bold) : font
+        let w = (item as NSString).size(withAttributes: [.font: f]).width
+        NSAttributedString(string: item, attributes: [.font: f, .foregroundColor: ink]).draw(at: NSPoint(x: x, y: mb.minY + 5))
+        x += w + 20
+    }
+    let clock = "Fri Nov 13  10:12"
+    let cw = (clock as NSString).size(withAttributes: [.font: font]).width
+    var rx = canvas.width - 14 - cw
+    NSAttributedString(string: clock, attributes: [.font: font, .foregroundColor: ink]).draw(at: NSPoint(x: rx, y: mb.minY + 5))
+    for name in ["switch.2", "magnifyingglass", "wifi", "battery.75percent"] {
+        let cfg = NSImage.SymbolConfiguration(pointSize: 13, weight: .regular)
+        let w = NSImage(systemSymbolName: name, accessibilityDescription: nil)?.withSymbolConfiguration(cfg)?.size.width ?? 16
+        rx -= w + 16
+        _ = symbol(name, x: rx)
+    }
 
     // Back window (the other app), slightly offset
     func window(_ r: NSRect, title: String, body: (NSRect) -> Void) {
@@ -146,14 +177,40 @@ func drawDesktop(_ canvas: NSSize, front: Front) {
     let back = main.offsetBy(dx: 26, dy: -16)
     if front == .browser { notesWin(back); browserWin(main) } else { browserWin(back); notesWin(main) }
 
-    // Dock
-    let dockApps = [browser, mail, notes, photos, music, terminal, calendar, chat, files, maps]
-    let icon: CGFloat = 40, gap: CGFloat = 8
-    let dockW = CGFloat(dockApps.count) * (icon + gap) + gap
-    let dock = NSRect(x: (canvas.width - dockW) / 2, y: 8, width: dockW, height: icon + 16)
-    rgb(255, 255, 255, 0.35).setFill(); rounded(dock, 16).fill()
-    rgb(255, 255, 255, 0.5).setStroke(); let db = rounded(dock.insetBy(dx: 0.5, dy: 0.5), 16); db.lineWidth = 1; db.stroke()
-    for (i, a) in dockApps.enumerated() { drawIcon(a, in: NSRect(x: dock.minX + gap + CGFloat(i) * (icon + gap), y: dock.minY + 8, width: icon, height: icon)) }
+    // Dock: Finder first, frosted glass, a divider before the Trash, dots under running apps.
+    let dockApps = [files, browser, mail, chat, maps, photos, calendar, notes, music, terminal]
+    let running: Set<String> = ["Finder", "Safari", "Mail", "Messages", "Notes", "Music", "Terminal"]
+    let icon: CGFloat = 44, gap: CGFloat = 5, divider: CGFloat = 13
+    let dockW = CGFloat(dockApps.count + 1) * (icon + gap) + gap + divider
+    let dock = NSRect(x: (canvas.width - dockW) / 2, y: 6, width: dockW, height: icon + 14)
+    NSGraphicsContext.saveGraphicsState()
+    let dshape = rounded(dock, 18)
+    dshape.addClip()
+    if let blur = wallpaperBlur { NSGraphicsContext.current!.cgContext.draw(blur, in: CGRect(origin: .zero, size: canvas)) }
+    rgb(255, 255, 255, 0.30).setFill(); dshape.fill()
+    NSGraphicsContext.restoreGraphicsState()
+    rgb(255, 255, 255, 0.45).setStroke(); let db = rounded(dock.insetBy(dx: 0.5, dy: 0.5), 18); db.lineWidth = 1; db.stroke()
+    var dx = dock.minX + gap
+    for a in dockApps {
+        drawIcon(a, in: NSRect(x: dx, y: dock.minY + 9, width: icon, height: icon))
+        if running.contains(a.name) {
+            rgb(20, 20, 25, 0.7).setFill()
+            NSBezierPath(ovalIn: NSRect(x: dx + icon / 2 - 2, y: dock.minY + 2.5, width: 4, height: 4)).fill()
+        }
+        dx += icon + gap
+    }
+    rgb(20, 20, 25, 0.25).setFill(); NSRect(x: dx + divider / 2 - 3, y: dock.minY + 12, width: 1, height: icon - 6).fill()
+    dx += divider
+    if let trash = NSImage(named: NSImage.trashEmptyName) {
+        trash.draw(in: NSRect(x: dx, y: dock.minY + 9, width: icon, height: icon))
+    }
+}
+
+/// Blurred wallpaper for the dock's frosted glass (set before drawing a desktop).
+var wallpaperBlur: CGImage?
+func drawWallpaper(_ canvas: NSSize) {
+    NSGradient(colors: [rgb(64, 110, 190), rgb(120, 96, 190), rgb(232, 140, 160)])!
+        .draw(in: NSRect(origin: .zero, size: canvas), angle: -55)
 }
 
 // MARK: - The switcher overlay (light, frosted, like the real one)
@@ -239,6 +296,7 @@ func lerp(_ a: NSRect, _ b: NSRect, _ t: CGFloat) -> NSRect {
 do {
     scale = 1
     let canvas = NSSize(width: 800, height: 500)
+    wallpaperBlur = blurred(render(canvas) { drawWallpaper(canvas) }, radius: 20)
     let desktops: [Front: CGImage] = [.browser: render(canvas) { drawDesktop(canvas, front: .browser) },
                                       .notes: render(canvas) { drawDesktop(canvas, front: .notes) }]
     let blurs = desktops.mapValues { blurred($0, radius: 30) }
@@ -301,10 +359,11 @@ do {
 do {
     scale = 2
     let canvas = NSSize(width: 800, height: 500)
+    wallpaperBlur = blurred(render(canvas) { drawWallpaper(canvas) }, radius: 40)
     let desktop = render(canvas) { drawDesktop(canvas, front: .browser) }
     let items: [(MockApp, String)] = [
-        (browser, "Weekend recipes — Browser"), (notes, "Project ideas"), (mail, "Inbox (3)"),
-        (browser, "Trip planning — Browser"), (terminal, "~/projects — zsh"), (music, "Focus playlist"),
+        (browser, "Weekend recipes"), (notes, "Project ideas"), (mail, "Inbox (3)"),
+        (browser, "Trip planning"), (terminal, "~/projects — zsh"), (music, "Focus playlist"),
     ]
     let layout = Layout(columns: 6, count: items.count, cellW: 118, cellH: 108, icon: 56)
     let origin = NSPoint(x: (canvas.width - layout.size.width) / 2, y: (canvas.height - layout.size.height) / 2 + 10)

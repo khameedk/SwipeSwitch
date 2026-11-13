@@ -11,9 +11,9 @@ through them, then lift your fingers to switch. It works like ⌘-Tab, but on th
 
 <p align="center">
   <img src="docs/images/swipeswitch-demo.gif" width="720"
-       alt="Animation on a mock desktop: three fingers swipe right on a trackpad, a frosted SwipeSwitch overlay appears over a browser window with a grid of app icons, the highlight moves right two apps, one more, then back one to Notes, and lifting the fingers brings the Notes window to the front.">
+       alt="Animation on a mock desktop: three fingers swipe right on a trackpad, a frosted SwipeSwitch overlay appears over a Safari window with a grid of macOS app icons, the highlight moves right two apps, one more, then back one to Notes, and lifting the fingers brings the Notes window to the front.">
 </p>
-<p align="center"><sub>Illustration with made-up apps.</sub></p>
+<p align="center"><sub>Illustration on a mock desktop: window contents are made up; app icons are macOS's own.</sub></p>
 
 - **Apps or windows.** Switch between apps, or between individual windows (shown with their titles).
 - **Grid or row.** In the grid, your most recent apps are on the top row; swipe down for older ones.
@@ -76,7 +76,7 @@ shortcut. SwipeSwitch gives ⌘Tab back to macOS when you turn the option off or
 
 <p align="center">
   <img src="docs/images/windows-mode.png" width="720"
-       alt="The SwipeSwitch overlay in windows mode over a mock browser window: a row of window tiles, each with an app icon and a window title such as 'Inbox (3)' or 'Trip planning — Browser', with one tile highlighted.">
+       alt="The SwipeSwitch overlay in windows mode over a mock Safari window: a row of window tiles, each with an app icon and a window title such as 'Inbox (3)' or 'Trip planning', with one tile highlighted.">
 </p>
 
 ## Gesture conflicts
@@ -268,7 +268,8 @@ SWIPESWITCH_DEMO=1 build/SwipeSwitch.app/Contents/MacOS/SwipeSwitch
 Add `SWIPESWITCH_SNAPSHOT_DIR=/some/folder` to save PNG snapshots of the overlay and settings window
 (SwipeSwitch's own windows only) into that folder.
 
-**README images** are drawn from scratch with made-up apps (no real screenshots). To regenerate them:
+**README images** are drawn by a script on a mock desktop (no real screenshots); they use macOS's built-in
+app icons, which are Apple's trademarks and artwork. To regenerate them:
 
 ```bash
 swift docs/make_media.swift docs/images
