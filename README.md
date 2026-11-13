@@ -34,12 +34,12 @@ through them, then lift your fingers to switch. It works like ⌘-Tab, but on th
 
 ```bash
 brew tap khameedk/tap
-brew trust --cask khameedk/tap/swipeswitch
+brew trust --tap khameedk/tap
 brew install --cask khameedk/tap/swipeswitch
 ```
 
-Homebrew asks you to trust casks from outside its own catalogue before installing them; the `brew trust`
-line does that for SwipeSwitch only. Then follow steps 2 and 3 below (Open Anyway, Accessibility). Update
+Homebrew asks you to trust taps from outside its own catalogue before installing from them; the
+`brew trust` line trusts this tap, which only contains SwipeSwitch (undo with `brew untrust --tap khameedk/tap`). Then follow steps 2 and 3 below (Open Anyway, Accessibility). Update
 with `brew upgrade --cask swipeswitch`.
 
 ### Option 2: Download
