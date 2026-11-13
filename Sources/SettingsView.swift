@@ -221,7 +221,7 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 520, height: 720)
         .onAppear(perform: refresh)
-        .onReceive(timer) { _ in refresh() }
+        .onReceive(timer) { _ in if settingsWindowVisible { refresh() } }
         .onChange(of: fingers) { _ in refresh() }
     }
 
@@ -250,11 +250,20 @@ struct SettingsView: View {
 
     private func setExcluded(_ ids: [String]) { excludedRaw = ids.joined(separator: "\n") }
 
+    /// Re-checks permissions. Only assigns values that changed, so the form isn't redrawn every second.
     private func refresh() {
-        status.axTrusted = AXIsProcessTrusted()
-        status.conflict = Prefs.gestureConflict(fingers: fingers)
-        status.loginStatus = SMAppService.mainApp.status
-        status.screenRecording = CGPreflightScreenCaptureAccess()
+        func update<T: Equatable>(_ path: ReferenceWritableKeyPath<SettingsStatus, T>, _ value: T) {
+            if status[keyPath: path] != value { status[keyPath: path] = value }
+        }
+        update(\.axTrusted, AXIsProcessTrusted())
+        update(\.conflict, Prefs.gestureConflict(fingers: fingers))
+        update(\.loginStatus, SMAppService.mainApp.status)
+        update(\.screenRecording, CGPreflightScreenCaptureAccess())
+    }
+
+    /// The once-a-second check only matters while the Settings window is on screen.
+    private var settingsWindowVisible: Bool {
+        NSApp.windows.contains { $0.title == "SwipeSwitch Settings" && $0.isVisible }
     }
 
     private func setLaunchAtLogin(_ on: Bool) {

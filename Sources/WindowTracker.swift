@@ -97,22 +97,33 @@ final class WindowTracker {
     private var stamps: [CGWindowID: Double] = [:]
     private var titles: [CGWindowID: String] = [:]
     private var observers: [pid_t: AXObserver] = [:]
+    /// When we last tried to subscribe to an app that refused, so refusing apps aren't re-asked on every open.
+    private var lastAttempt: [pid_t: Double] = [:]
+    private static let retryInterval = 30.0
+    /// Scanning every running process is slow (~20 ms: macOS looks up each one's app type), so it only happens
+    /// at launch and then at most every `retryInterval`; new apps are caught by launch/activation notifications.
+    private var lastFullScan = 0.0
+    /// Whether each window-owning program is a regular app. Looking that up costs ~1–2 ms per program, and it
+    /// doesn't change while the program runs, so it's cached and dropped when the program quits.
+    private var regularApps: [pid_t: NSRunningApplication?] = [:]
     private let myPID = ProcessInfo.processInfo.processIdentifier
 
     init() {
         let nc = NSWorkspace.shared.notificationCenter
         nc.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] n in
             guard let self, let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
-            self.ensureObserver(for: app)
+            self.ensureObserver(for: app, force: true)   // retry now in case it has finished launching
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { self.stampFocusedWindow(of: app.processIdentifier) }
         }
         nc.addObserver(forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main) { [weak self] n in
             guard let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { self?.ensureObserver(for: app) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { self?.ensureObserver(for: app, force: true) }
         }
         nc.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main) { [weak self] n in
-            guard let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
-                  let obs = self?.observers.removeValue(forKey: app.processIdentifier) else { return }
+            guard let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
+            self?.lastAttempt.removeValue(forKey: app.processIdentifier)
+            self?.regularApps.removeValue(forKey: app.processIdentifier)
+            guard let obs = self?.observers.removeValue(forKey: app.processIdentifier) else { return }
             CFRunLoopRemoveSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(obs), .defaultMode)
         }
         ensureObservers()
@@ -120,14 +131,21 @@ final class WindowTracker {
 
     // MARK: Focus tracking
 
+    /// Subscribes to focus changes in apps we aren't watching yet. Apps that refuse are retried at most
+    /// every `retryInterval` seconds (and right away when they're activated or launched).
     func ensureObservers() {
         guard AXIsProcessTrusted() else { return }
-        for app in NSWorkspace.shared.runningApplications { ensureObserver(for: app) }
+        lastFullScan = CACurrentMediaTime()
+        for app in NSWorkspace.shared.runningApplications { ensureObserver(for: app, trusted: true) }
     }
 
-    private func ensureObserver(for app: NSRunningApplication) {
+    private func ensureObserver(for app: NSRunningApplication, force: Bool = false, trusted: Bool? = nil) {
         let pid = app.processIdentifier
-        guard AXIsProcessTrusted(), app.activationPolicy == .regular, pid != myPID, observers[pid] == nil else { return }
+        guard app.activationPolicy == .regular, pid != myPID, observers[pid] == nil else { return }
+        let now = CACurrentMediaTime()
+        if !force, let last = lastAttempt[pid], now - last < Self.retryInterval { return }
+        guard trusted ?? AXIsProcessTrusted() else { return }
+        lastAttempt[pid] = now
         var obs: AXObserver?
         guard AXObserverCreate(pid, windowFocusCallback, &obs) == .success, let obs else { return }
         let el = AXUIElementCreateApplication(pid)
@@ -139,6 +157,7 @@ final class WindowTracker {
         guard added else { return }   // app not ready yet; we'll retry later
         CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(obs), .defaultMode)
         observers[pid] = obs
+        lastAttempt.removeValue(forKey: pid)
     }
 
     fileprivate func noteFocused(_ window: AXUIElement) {
@@ -163,7 +182,8 @@ final class WindowTracker {
     private struct AXInfo { let element: AXUIElement; let title: String; let minimized: Bool }
 
     /// Windows on the current desktop as Accessibility sees them (nil if unavailable).
-    private func axWindows(pid: pid_t) -> [CGWindowID: AXInfo]? {
+    /// Safe to call from any thread (no shared state).
+    private static func axWindows(pid: pid_t) -> [CGWindowID: AXInfo]? {
         let el = AXUIElementCreateApplication(pid)
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(el, kAXWindowsAttribute as CFString, &value) == .success,
@@ -182,24 +202,41 @@ final class WindowTracker {
     /// most recently focused first.
     func candidates() -> [WindowEntry] {
         let trusted = AXIsProcessTrusted()
-        if trusted { ensureObservers() }
+        if trusted && CACurrentMediaTime() - lastFullScan > Self.retryInterval { ensureObservers() }
         if let front = NSWorkspace.shared.frontmostApplication { stampFocusedWindow(of: front.processIdentifier) }
 
         let scope = Prefs.scope
         let includeMinimized = Prefs.includeMinimized
         let includeHidden = Prefs.includeHidden
         let excluded = Set(Prefs.excluded)
-        var apps: [pid_t: NSRunningApplication] = [:]
-        for app in NSWorkspace.shared.runningApplications
-        where app.activationPolicy == .regular && app.processIdentifier != myPID && !excluded.contains(app.bundleIdentifier ?? "") {
-            apps[app.processIdentifier] = app
-        }
-
         let onScreen = Set(Self.windowIDs(onScreenOnly: true))
         let visibleAnywhere = PrivateAPI.visibleWindowIDsOnAllDesktops()
         guard let all = CGWindowListCopyWindowInfo([.optionAll, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else { return [] }
 
+        // Only look up the programs that own normal windows (a dozen or so), not every running process.
+        var apps: [pid_t: NSRunningApplication] = [:]
+        var checked = Set<pid_t>()
+        for w in all where (w[kCGWindowLayer as String] as? NSNumber)?.intValue == 0 {
+            guard let pid = (w[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value, checked.insert(pid).inserted,
+                  pid != myPID else { continue }
+            if regularApps[pid] == nil {
+                let app = NSRunningApplication(processIdentifier: pid)
+                regularApps[pid] = app?.activationPolicy == .regular ? app : .some(nil)
+            }
+            guard let app = regularApps[pid] ?? nil, !app.isTerminated, !excluded.contains(app.bundleIdentifier ?? "") else { continue }
+            apps[pid] = app
+        }
+
+        // Each app answers Accessibility queries separately, so ask them in parallel batches and combine.
         var axCache: [pid_t: [CGWindowID: AXInfo]?] = [:]
+        if trusted {
+            var pids: [pid_t] = []
+            var seen = Set<pid_t>()
+            for w in all where (w[kCGWindowLayer as String] as? NSNumber)?.intValue == 0 {
+                if let pid = (w[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value, apps[pid] != nil, seen.insert(pid).inserted { pids.append(pid) }
+            }
+            axCache = Self.fetchAXWindows(pids)
+        }
         var found: [(entry: WindowEntry, rank: Int)] = []
         for (rank, w) in all.enumerated() {
             guard (w[kCGWindowLayer as String] as? NSNumber)?.intValue == 0,
@@ -212,7 +249,6 @@ final class WindowTracker {
                width < 80 || height < 40 { continue }
             if let alpha = (w[kCGWindowAlpha as String] as? NSNumber)?.doubleValue, alpha <= 0 { continue }
 
-            if trusted && axCache[pid] == nil { axCache[pid] = axWindows(pid: pid) }
             let ax: [CGWindowID: AXInfo]? = trusted ? (axCache[pid] ?? nil) : nil
             let info = ax?[id]
             var minimized = false
@@ -257,6 +293,29 @@ final class WindowTracker {
             }
         }
         return found.map(\.entry)
+    }
+
+    /// Parallel batches for Accessibility reads. Measured on a 13-app setup: 4 batches ≈ 44 ms per open vs
+    /// ≈ 53 ms one app at a time; 12 batches was no faster than 4.
+    private static let axBatches = 4
+
+    private static func fetchAXWindows(_ pids: [pid_t]) -> [pid_t: [CGWindowID: AXInfo]?] {
+        var out: [pid_t: [CGWindowID: AXInfo]?] = [:]
+        let batches = min(axBatches, pids.count)
+        if batches <= 1 {
+            for pid in pids { out[pid] = axWindows(pid: pid) }
+            return out
+        }
+        var results = [[CGWindowID: AXInfo]?](repeating: nil, count: pids.count)
+        let lock = NSLock()
+        DispatchQueue.concurrentPerform(iterations: batches) { b in
+            for i in stride(from: b, to: pids.count, by: batches) {
+                let r = axWindows(pid: pids[i])
+                lock.lock(); results[i] = r; lock.unlock()
+            }
+        }
+        for (i, pid) in pids.enumerated() { out[pid] = results[i] }
+        return out
     }
 
     private static func windowIDs(onScreenOnly: Bool) -> [CGWindowID] {

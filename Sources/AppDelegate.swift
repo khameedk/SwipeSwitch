@@ -30,6 +30,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return self.switcher.begin()
         }
         recognizer.onStep = { [weak self] dx, dy in self?.switcher.step(dx: dx, dy: dy) }
+        recognizer.onTouchDown = { [weak self] in
+            DispatchQueue.main.async { if Prefs.enabled { self?.switcher.prepare() } }
+        }
         recognizer.onEnd = { [weak self] in
             guard let self = self else { return }
             if self.demoCancels { self.switcher.cancel() } else { self.switcher.commit() }
@@ -39,6 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         KeyboardSwitcher.restoreSystemCommandTabIfWeChangedIt()
         keyboard.onOpen = { [weak self] startAtEnd in self?.switcher.begin(startAtEnd: startAtEnd, haptics: false) ?? false }
         keyboard.onStep = { [weak self] dx, dy in self?.switcher.step(dx: dx, dy: dy) }
+        keyboard.onCommandDown = { [weak self] in self?.switcher.prepare() }
         keyboard.onCommit = { [weak self] in self?.switcher.commit() }
         keyboard.onCancel = { [weak self] in self?.switcher.cancel() }
         keyboard.isGestureActive = { [weak self] in self?.recognizer.isActive ?? false }
@@ -71,6 +75,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             showSettings()
             if !AXIsProcessTrusted() { Activator.promptForAccessibility() }
         }
+
+        // Warm up the overlay so the first open is as quick as later ones.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.switcher.warmUp() }
 
         if ProcessInfo.processInfo.environment["SWIPESWITCH_KEYDEMO"] != nil { runKeyboardDemo() }
 

@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import QuartzCore
 
 struct SwitchItem: Identifiable {
     enum Target {
@@ -174,7 +175,7 @@ final class SwitcherController {
 
         switch Prefs.mode {
         case .apps:
-            var (list, _) = apps.candidates(windowOwners: Set(wins.map { $0.app.processIdentifier }))
+            var (list, _) = apps.candidates(owners: Dictionary(wins.map { ($0.app.processIdentifier, $0.app) }, uniquingKeysWith: { a, _ in a }))
             if byName { list.sort { less($0.localizedName ?? "", $1.localizedName ?? "") } }
             let items = list.enumerated().map { i, app in
                 SwitchItem(id: i, title: app.localizedName ?? "App", icon: app.icon ?? NSImage(),
@@ -202,6 +203,35 @@ final class SwitcherController {
     }
 
     /// Opens the switcher with the previous app/window selected. Returns false if there's nothing to switch to.
+    /// A list built ahead of time (when fingers touch down or ⌘ is pressed), used if it's still fresh.
+    private var prepared: (items: [SwitchItem], currentIndex: Int?, at: Double)?
+    private static let preparedMaxAge = 1.0
+
+    /// Builds the list ahead of time so opening is instant. Cheap to call often; skips if recently built.
+    func prepare() {
+        guard !isShowing else { return }
+        if let p = prepared, CACurrentMediaTime() - p.at < 0.3 { return }
+        let (items, currentIndex) = makeItems()
+        prepared = (items, currentIndex, CACurrentMediaTime())
+    }
+
+    /// One-time warm-up at launch: builds a list and renders the overlay off-screen, so the first real open
+    /// isn't slower than the rest.
+    func warmUp() {
+        let (items, _) = makeItems()
+        guard !isShowing, !items.isEmpty else { return }
+        model.items = Array(items.prefix(2))
+        model.style = CellStyle.apps(icon: CGFloat(Prefs.iconSize))
+        model.columns = 2
+        let size = model.style.panelSize(count: model.items.count, columns: 2)
+        panel.setFrame(NSRect(origin: .zero, size: size), display: false)
+        if let view = panel.contentView, let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+            view.layoutSubtreeIfNeeded()
+            view.cacheDisplay(in: view.bounds, to: rep)
+        }
+        model.items = []
+    }
+
     /// Haptics only make sense for trackpad sessions (you feel them through the trackpad).
     private var sessionHaptics = true
 
@@ -213,7 +243,13 @@ final class SwitcherController {
         let screen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) } ?? NSScreen.main
         guard let vis = screen?.visibleFrame else { return false }
 
-        var (items, currentIndex) = makeItems()
+        var (items, currentIndex): ([SwitchItem], Int?)
+        if let p = prepared, CACurrentMediaTime() - p.at < Self.preparedMaxAge {
+            (items, currentIndex) = (p.items, p.currentIndex)
+        } else {
+            (items, currentIndex) = makeItems()
+        }
+        prepared = nil
         guard items.count >= (currentIndex == nil ? 1 : 2) else { return false }
 
         let windowsMode = Prefs.mode == .windows

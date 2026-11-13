@@ -54,20 +54,16 @@ final class AppTracker {
 
     /// Apps in most-recently-used order, limited to those that own one of `windowOwners` (apps with no real
     /// window are never shown). `firstIsCurrent` says whether item 0 is the app already in front.
-    func candidates(windowOwners: Set<pid_t>) -> (apps: [NSRunningApplication], firstIsCurrent: Bool) {
-        let running = NSWorkspace.shared.runningApplications.filter {
-            $0.activationPolicy == .regular && $0.processIdentifier != myPID && !$0.isTerminated
-        }
-        var byPID: [pid_t: NSRunningApplication] = [:]
-        for app in running { byPID[app.processIdentifier] = app }
-
-        mru.removeAll { byPID[$0] == nil }
-        for app in running where !mru.contains(app.processIdentifier) { mru.append(app.processIdentifier) }
+    /// `owners` are the apps that own a real window (already known to be regular, running apps); only they
+    /// appear. Avoids scanning every running process, which is slow.
+    func candidates(owners: [pid_t: NSRunningApplication]) -> (apps: [NSRunningApplication], firstIsCurrent: Bool) {
+        let byPID = owners
+        for pid in owners.keys.sorted() where !mru.contains(pid) { mru.append(pid) }
 
         let frontPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
         if let f = frontPID, let i = mru.firstIndex(of: f), i != 0 { mru.remove(at: i); mru.insert(f, at: 0) }
 
-        let ordered = mru.compactMap { byPID[$0] }.filter { windowOwners.contains($0.processIdentifier) }
+        let ordered = mru.compactMap { byPID[$0] }
         return (Array(ordered.prefix(Prefs.maxApps)), ordered.first?.processIdentifier == frontPID)
     }
 }

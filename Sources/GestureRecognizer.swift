@@ -4,6 +4,8 @@ import QuartzCore
 /// Turns raw finger frames into: begin (swipe started), step(dx, dy) as the fingers travel, and end (fingers lifted).
 final class SwipeGestureRecognizer {
     var onBegin: (() -> Bool)?
+    /// Fingers just touched down (the swipe may or may not follow): a chance to prepare ahead of time.
+    var onTouchDown: (() -> Void)?
     var onStep: ((Int, Int) -> Void)?
     var onEnd: (() -> Void)?
 
@@ -43,6 +45,7 @@ final class SwipeGestureRecognizer {
                 device = f.device
                 startX = tx; startY = ty
                 armWatchdog()
+                onTouchDown?()
             }
 
         case .tracking:

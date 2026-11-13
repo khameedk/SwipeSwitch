@@ -25,6 +25,10 @@ enum SystemCommandTab {
 /// Every other key passes through untouched.
 final class KeyboardSwitcher {
     var onOpen: ((_ startAtEnd: Bool) -> Bool)?
+    /// ⌘ was just pressed (⌘Tab may follow): a chance to prepare ahead of time. Called asynchronously,
+    /// after the key event has been passed on, so ordinary ⌘ shortcuts are never delayed.
+    var onCommandDown: (() -> Void)?
+    private var commandWasDown = false
     var onStep: ((Int, Int) -> Void)?
     var onCommit: (() -> Void)?
     var onCancel: (() -> Void)?
@@ -101,7 +105,10 @@ final class KeyboardSwitcher {
         switch type {
         case .flagsChanged:
             let shift = flags.contains(.maskShift)
-            defer { shiftWasDown = shift }
+            defer { shiftWasDown = shift; commandWasDown = command }
+            if !isActive && command && !commandWasDown, let prep = onCommandDown {
+                DispatchQueue.main.async { prep() }
+            }
             if isActive && !command {          // ⌘ released: switch
                 isActive = false
                 onCommit?()
