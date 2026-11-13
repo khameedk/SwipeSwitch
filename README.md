@@ -11,7 +11,7 @@ through them, then lift your fingers to switch. It works like ⌘-Tab, but on th
 
 <p align="center">
   <img src="docs/images/swipeswitch-demo.gif" width="720"
-       alt="Animation: three fingers swipe right on a trackpad, the SwipeSwitch overlay appears with a grid of app icons, the highlight moves right three apps and down one row, and lifting the fingers switches to the selected app.">
+       alt="Animation on a mock desktop: three fingers swipe right on a trackpad, a frosted SwipeSwitch overlay appears over a browser window with a grid of app icons, the highlight moves right two apps, one more, then back one to Notes, and lifting the fingers brings the Notes window to the front.">
 </p>
 <p align="center"><sub>Illustration with made-up apps.</sub></p>
 
@@ -76,7 +76,7 @@ shortcut. SwipeSwitch gives ⌘Tab back to macOS when you turn the option off or
 
 <p align="center">
   <img src="docs/images/windows-mode.png" width="720"
-       alt="The SwipeSwitch overlay in windows mode: a grid of window tiles, each with an app icon and a window title such as 'Inbox (3)' or 'Trip planning — Browser', with one tile highlighted.">
+       alt="The SwipeSwitch overlay in windows mode over a mock browser window: a row of window tiles, each with an app icon and a window title such as 'Inbox (3)' or 'Trip planning — Browser', with one tile highlighted.">
 </p>
 
 ## Gesture conflicts
