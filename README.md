@@ -33,7 +33,6 @@ through them, then lift your fingers to switch. It works like ⌘-Tab, but on th
 ### Option 1: Homebrew
 
 ```bash
-brew tap khameedk/tap
 brew trust --tap khameedk/tap
 brew install --cask khameedk/tap/swipeswitch
 ```
