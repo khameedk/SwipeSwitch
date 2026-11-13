@@ -2,16 +2,28 @@
 
 ## Reporting a vulnerability
 
-Please report security issues privately rather than in a public issue:
-use **Security › Report a vulnerability** on this repository's GitHub page.
+Please report security vulnerabilities privately, not in a public issue, using GitHub's private
+vulnerability reporting:
 
-Include what you found, how to reproduce it, and the macOS version you tested on.
-You should get a reply within a week.
+**https://github.com/khameedk/SwipeSwitch/security/advisories/new**
+
+(Or go to the repository's **Security** tab and choose **Report a vulnerability**.) Only the maintainer
+and you can see the report.
+
+Please include what you found, how to reproduce it, and the macOS version you tested on.
+
+## What to expect
+
+- **Acknowledgement within 2 weeks** of your report.
+- We'll work with you to confirm the issue and agree on a fix and a disclosure date. Fixes are released
+  before the vulnerability is disclosed publicly.
+- Once fixed, the vulnerability is disclosed in a GitHub security advisory, crediting you unless you'd
+  rather stay anonymous.
 
 ## Supported versions
 
-Only the latest code on the `main` branch is supported. Pull and rebuild
-(`./build.sh --install`) to get fixes.
+Only the latest release and the latest code on the `main` branch are supported. Update to the newest
+release, or pull and rebuild (`./build.sh --install`), to get fixes.
 
 ## What SwipeSwitch can access
 

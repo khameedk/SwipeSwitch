@@ -1,0 +1,71 @@
+# Builds SwipeSwitch.app when a version tag (e.g. v1.0.0) is pushed, and publishes it as a GitHub Release with
+# a checksum and a signed build-provenance record, so anyone can verify the download was built here from that tag.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: macos-latest   # Apple Silicon runner
+    permissions:
+      contents: write        # create the release
+      id-token: write        # sign the provenance record
+      attestations: write    # store the provenance record
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set the app version from the tag
+        run: plutil -replace CFBundleShortVersionString -string "${TAG#v}" Info.plist
+
+      - name: Build SwipeSwitch.app
+        run: ./build.sh
+
+      - name: Check for networking code (source and binary)
+        run: ./scripts/check-no-network.sh build/SwipeSwitch.app/Contents/MacOS/SwipeSwitch
+
+      - name: Zip the app and record its checksum
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent build/SwipeSwitch.app "SwipeSwitch-$TAG.zip"
+          shasum -a 256 "SwipeSwitch-$TAG.zip" > "SwipeSwitch-$TAG.zip.sha256"
+
+      - name: Sign build provenance
+        id: attest
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: SwipeSwitch-${{ github.ref_name }}.zip
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          cp "$BUNDLE" "SwipeSwitch-$TAG.zip.sigstore.json"
+          cat > notes.md <<NOTES
+          ### Install
+
+          1. Download **SwipeSwitch-$TAG.zip**, unzip it, and move **SwipeSwitch.app** to Applications.
+          2. Open it. macOS blocks the first launch because the app isn't notarized by Apple: go to
+             **System Settings › Privacy & Security**, scroll down, and click **Open Anyway**.
+          3. Grant **Accessibility** access when asked.
+
+          Prefer to build it yourself? See [Install](https://github.com/khameedk/SwipeSwitch#install) in the README.
+
+          ### Verify the download (optional)
+
+          \`\`\`bash
+          gh attestation verify SwipeSwitch-$TAG.zip --repo khameedk/SwipeSwitch
+          \`\`\`
+
+          This checks it was built by this repository's release workflow from tag $TAG.
+          NOTES
+          gh release create "$TAG" --title "SwipeSwitch $TAG" --notes-file notes.md --generate-notes \
+            "SwipeSwitch-$TAG.zip" "SwipeSwitch-$TAG.zip.sha256" "SwipeSwitch-$TAG.zip.sigstore.json"

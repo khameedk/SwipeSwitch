@@ -30,8 +30,26 @@ through them, then lift your fingers to switch. It works like ⌘-Tab, but on th
 
 ## Install
 
-SwipeSwitch is distributed as source code: you build it on your own Mac. That means you can read
-everything it does first, and macOS doesn't block it as an app downloaded from the internet.
+### Option 1: Download
+
+1. Download the latest **SwipeSwitch-vX.Y.Z.zip** from [Releases](https://github.com/khameedk/SwipeSwitch/releases/latest),
+   unzip it, and move **SwipeSwitch.app** to Applications.
+2. Open it. SwipeSwitch isn't notarized by Apple (that needs a paid developer account), so macOS blocks the
+   first launch: go to **System Settings › Privacy & Security**, scroll down, and click **Open Anyway**.
+3. When asked, grant **Accessibility** access in System Settings › Privacy & Security › Accessibility.
+
+Each release is built on GitHub from the tagged source and comes with a signed build record, so you can
+check the download came from this repository (needs the [GitHub CLI](https://cli.github.com)):
+
+```bash
+gh attestation verify SwipeSwitch-vX.Y.Z.zip --repo khameedk/SwipeSwitch
+```
+
+To update, download the newest release and replace the app. Your settings and permissions are kept.
+
+### Option 2: Build from source
+
+Build it on your own Mac, so you can read everything it does first and macOS doesn't block it as a download.
 
 1. Install the Command Line Tools, if you haven't already:
    ```bash
@@ -202,6 +220,7 @@ Every change to this repo is checked automatically on GitHub:
 | **Build** | Builds the app from exactly the code in the repo, then runs [`scripts/check-no-network.sh`](scripts/check-no-network.sh), which fails if the source contains networking code or the built app imports networking functions. |
 | **CodeQL** | GitHub's code scanner looks for security problems in the Swift code (also weekly). |
 | **OpenSSF Scorecard** | Rates the repo's security practices; the score is the badge at the top. |
+| **Release** | Tagged versions are built on GitHub, checked for networking code, and published with a checksum and a signed build-provenance record. |
 | **Dependabot** | Keeps the GitHub Actions used above up to date. The app itself has no third-party dependencies. |
 
 You can run the network check yourself after building:
