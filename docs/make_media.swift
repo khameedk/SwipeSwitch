@@ -1,13 +1,41 @@
 // Draws the README's example images: a mock desktop with macOS's built-in app icons (Safari, Mail, …, read
 // from the system, identical on every Mac). Window contents are made up; nothing is captured from a real screen.
 // App icons and the Apple logo are Apple's trademarks and artwork.
-// Usage: swift docs/make_media.swift docs/images
+// Usage (from the repo root): swift docs/make_media.swift docs/images
+// Each image is saved under a name containing a fingerprint of its contents (e.g. swipeswitch-demo-1a2b3c4d.gif),
+// the previous version is removed, and README.md's links are updated, so browsers never show a stale cached copy.
 import AppKit
 import CoreImage
 import ImageIO
 import UniformTypeIdentifiers
+import CryptoKit
 
 let outDir = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "docs/images"
+let readmePath = "README.md"
+
+/// Renames a freshly written `<name>.<ext>` to `<name>-<fingerprint>.<ext>`, deletes older versions, and points
+/// README.md's links at the new file.
+func publish(_ name: String, _ ext: String) {
+    let fm = FileManager.default
+    let tmp = "\(outDir)/\(name).\(ext)"
+    guard let data = fm.contents(atPath: tmp) else { return }
+    let hash = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined().prefix(8)
+    let final = "\(name)-\(hash).\(ext)"
+    for old in (try? fm.contentsOfDirectory(atPath: outDir)) ?? []
+    where old != final && old.hasPrefix("\(name)-") && old.hasSuffix(".\(ext)") {
+        try? fm.removeItem(atPath: "\(outDir)/\(old)")
+    }
+    try? fm.removeItem(atPath: "\(outDir)/\(final)")
+    try? fm.moveItem(atPath: tmp, toPath: "\(outDir)/\(final)")
+    if var readme = try? String(contentsOfFile: readmePath, encoding: .utf8) {
+        let pattern = "\(NSRegularExpression.escapedPattern(for: outDir))/\(name)(-[0-9a-f]{8})?\\.\(ext)"
+        let regex = try! NSRegularExpression(pattern: pattern)
+        readme = regex.stringByReplacingMatches(in: readme, range: NSRange(readme.startIndex..., in: readme),
+                                                withTemplate: "\(outDir)/\(final)")
+        try? readme.write(toFile: readmePath, atomically: true, encoding: .utf8)
+    }
+    print("\(outDir)/\(final)")
+}
 try? FileManager.default.createDirectory(atPath: outDir, withIntermediateDirectories: true)
 
 // MARK: - Mock apps
@@ -351,7 +379,7 @@ do {
                                                                                kCGImagePropertyGIFUnclampedDelayTime: delay]] as CFDictionary)
     }
     CGImageDestinationFinalize(dest)
-    print("swipeswitch-demo.gif: \(frames.count) frames")
+    publish("swipeswitch-demo", "gif")
 }
 
 // MARK: - 2. Windows mode (still image, retina)
@@ -375,5 +403,5 @@ do {
     let url = URL(fileURLWithPath: "\(outDir)/windows-mode.png") as CFURL
     let dest = CGImageDestinationCreateWithURL(url, UTType.png.identifier as CFString, 1, nil)!
     CGImageDestinationAddImage(dest, image, nil); CGImageDestinationFinalize(dest)
-    print("windows-mode.png")
+    publish("windows-mode", "png")
 }
