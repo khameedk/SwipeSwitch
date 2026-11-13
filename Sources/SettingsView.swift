@@ -1,0 +1,265 @@
+import AppKit
+import ServiceManagement
+import SwiftUI
+
+final class SettingsStatus: ObservableObject {
+    @Published var axTrusted = AXIsProcessTrusted()
+    @Published var trackpads = MultitouchMonitor.shared.deviceCount
+    @Published var conflict: String?
+    @Published var loginStatus = SMAppService.mainApp.status
+    @Published var loginError: String?
+    @Published var screenRecording = CGPreflightScreenCaptureAccess()
+}
+
+struct SettingsView: View {
+    @AppStorage(Prefs.Key.enabled) private var enabled = true
+    @AppStorage(Prefs.Key.fingers) private var fingers = 3
+    @AppStorage(Prefs.Key.direction) private var direction: SwipeDirection = .right
+    @AppStorage(Prefs.Key.step) private var step = 8.0
+    @AppStorage(Prefs.Key.haptics) private var haptics = true
+    @AppStorage(Prefs.Key.scope) private var scope: Scope = .all
+    @AppStorage(Prefs.Key.maxApps) private var maxApps = 24
+    @AppStorage(Prefs.Key.layout) private var layout: Layout = .grid
+    @AppStorage(Prefs.Key.columns) private var columns = 6
+    @AppStorage(Prefs.Key.iconSize) private var iconSize = 64.0
+    @AppStorage(Prefs.Key.showAllNames) private var showAllNames = false
+    @AppStorage(Prefs.Key.wrap) private var wrap = false
+    @AppStorage(Prefs.Key.excluded) private var excludedRaw = ""
+    @AppStorage(Prefs.Key.mode) private var mode: SwitchMode = .apps
+    @AppStorage(Prefs.Key.includeMinimized) private var includeMinimized = true
+    @AppStorage(Prefs.Key.includeHidden) private var includeHidden = true
+    @AppStorage(Prefs.Key.sort) private var sort: SortOrder = .recent
+    @AppStorage(Prefs.Key.hapticStrength) private var hapticStrength: HapticStrength = .medium
+
+    @ObservedObject var status: SettingsStatus
+
+    private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    private var excluded: [String] { excludedRaw.split(separator: "\n").map(String.init) }
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Enable swipe switching", isOn: $enabled)
+                Toggle("Launch at login", isOn: Binding(get: { status.loginStatus == .enabled }, set: setLaunchAtLogin))
+                if status.loginStatus == .requiresApproval {
+                    note("Approve SwipeSwitch in System Settings › General › Login Items.")
+                }
+                if let err = status.loginError { note(err, color: .red) }
+            }
+
+            Section("Gesture") {
+                Picker("Fingers", selection: $fingers) {
+                    Text("Three").tag(3)
+                    Text("Four").tag(4)
+                }
+                .pickerStyle(.segmented)
+                Picker("Start by swiping", selection: $direction) {
+                    Text("Right").tag(SwipeDirection.right)
+                    Text("Left").tag(SwipeDirection.left)
+                }
+                .pickerStyle(.segmented)
+                LabeledContent("Swipe distance per step") {
+                    HStack {
+                        Slider(value: $step, in: 4...16, step: 1)
+                        Text("\(Int(step)) mm").monospacedDigit().foregroundStyle(.secondary).frame(width: 44, alignment: .trailing)
+                    }
+                    .frame(width: 240)
+                }
+                Toggle("Haptic feedback on each step", isOn: $haptics)
+                LabeledContent("Haptic strength") {
+                    HStack {
+                        Picker("", selection: $hapticStrength) {
+                            Text("Light").tag(HapticStrength.light)
+                            Text("Medium").tag(HapticStrength.medium)
+                            Text("Strong").tag(HapticStrength.strong)
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .fixedSize()
+                        Button("Test") { MultitouchMonitor.shared.haptic(strength: hapticStrength.actuationID) }
+                    }
+                }
+                .disabled(!haptics)
+                if let conflict = status.conflict {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label(conflict, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                            .font(.callout)
+                        Button("Open Trackpad Settings…") { Activator.openTrackpadSettings() }
+                    }
+                }
+                note(howItWorks)
+            }
+
+            Section("Switching") {
+                Picker("Switch between", selection: $mode) {
+                    Text("Apps").tag(SwitchMode.apps)
+                    Text("Windows").tag(SwitchMode.windows)
+                }
+                .pickerStyle(.segmented)
+                Picker("Show \(mode == .apps ? "apps" : "windows") from", selection: $scope) {
+                    Text("All desktops").tag(Scope.all)
+                    Text("Current desktop").tag(Scope.current)
+                }
+                Picker("Sort by", selection: $sort) {
+                    Text("Last active").tag(SortOrder.recent)
+                    Text("Name").tag(SortOrder.name)
+                }
+                .pickerStyle(.segmented)
+                Toggle("Include minimized windows", isOn: $includeMinimized)
+                Toggle("Include windows of hidden apps", isOn: $includeHidden)
+                note(mode == .apps
+                     ? "Apps without an open window are never shown. These options decide whether minimized or hidden windows count."
+                     : "Minimized windows and hidden apps' windows appear faded.")
+                if mode == .windows {
+                    if !status.axTrusted {
+                        note("Windows mode needs Accessibility access (see Status below) to read titles and pick the exact window.", color: .orange)
+                    }
+                }
+                Stepper("Show up to \(maxApps) \(mode == .apps ? "apps" : "windows")", value: $maxApps, in: 4...60)
+                LabeledContent("Excluded apps") {
+                    Menu("Add…") {
+                        ForEach(addableApps, id: \.bundleIdentifier) { app in
+                            Button(app.localizedName ?? app.bundleIdentifier ?? "?") {
+                                if let id = app.bundleIdentifier { setExcluded(excluded + [id]) }
+                            }
+                        }
+                    }
+                    .fixedSize()
+                }
+                ForEach(excluded, id: \.self) { id in
+                    HStack {
+                        Image(nsImage: Self.icon(for: id)).resizable().frame(width: 18, height: 18)
+                        Text(Self.name(for: id))
+                        Spacer()
+                        Button { setExcluded(excluded.filter { $0 != id }) } label: { Image(systemName: "minus.circle.fill") }
+                            .buttonStyle(.borderless)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            Section("Appearance") {
+                Picker("Layout", selection: $layout) {
+                    Text("Grid: newest on top row").tag(Layout.grid)
+                    Text("Single row").tag(Layout.row)
+                }
+                Stepper("Columns: \(columns)", value: $columns, in: 3...12)
+                    .disabled(layout == .row)
+                LabeledContent("Icon size") {
+                    Slider(value: $iconSize, in: 40...112, step: 8).frame(width: 220)
+                }
+                Toggle("Show names under every app", isOn: $showAllNames)
+                    .disabled(mode == .windows)
+                Toggle("Wrap around at the ends", isOn: $wrap)
+            }
+
+            Section("Status") {
+                HStack {
+                    Label(status.axTrusted ? "Accessibility access granted" : "Accessibility access needed",
+                          systemImage: status.axTrusted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                        .foregroundStyle(status.axTrusted ? .green : .orange)
+                    Spacer()
+                    if !status.axTrusted {
+                        Button("Grant…") {
+                            Activator.promptForAccessibility()
+                            Activator.openAccessibilitySettings()
+                        }
+                    }
+                }
+                note("Used to bring the app or window you land on to the front, including ones on other desktops, and to read window titles.")
+                if mode == .windows {
+                    HStack {
+                        Label(status.screenRecording ? "Screen Recording granted" : "Screen Recording (optional)",
+                              systemImage: status.screenRecording ? "checkmark.circle.fill" : "circle.dashed")
+                            .foregroundStyle(status.screenRecording ? .green : .secondary)
+                        Spacer()
+                        if !status.screenRecording {
+                            Button("Grant…") { Activator.openScreenRecordingSettings() }
+                        }
+                    }
+                    note("Without it, windows on other desktops show their app name until you've visited them once. SwipeSwitch never records your screen.")
+                }
+                HStack {
+                    Label(status.trackpads > 0 ? "\(status.trackpads) trackpad\(status.trackpads == 1 ? "" : "s") detected" : "No trackpad detected",
+                          systemImage: "hand.point.up.left")
+                    Spacer()
+                    Button("Restart tracking") {
+                        MultitouchMonitor.shared.restart()
+                        status.trackpads = MultitouchMonitor.shared.deviceCount
+                    }
+                }
+            }
+
+            Section {
+                HStack {
+                    Spacer()
+                    Button("Restore Defaults") { Prefs.reset() }
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .frame(width: 520, height: 720)
+        .onAppear(perform: refresh)
+        .onReceive(timer) { _ in refresh() }
+        .onChange(of: fingers) { _ in refresh() }
+    }
+
+    private var howItWorks: String {
+        let f = fingers == 4 ? "four" : "three"
+        let back = direction == .right ? "left" : "right"
+        let down = layout == .grid ? " In the grid, swipe down for older apps." : ""
+        return "Swipe \(direction.rawValue) with \(f) fingers to open the switcher; keep swiping to move, or swipe \(back) to go back.\(down) Lift your fingers to switch."
+    }
+
+    private var addableApps: [NSRunningApplication] {
+        let ex = Set(excluded)
+        var seen = Set<String>()
+        return NSWorkspace.shared.runningApplications
+            .filter { $0.activationPolicy == .regular }
+            .filter { app in
+                guard let id = app.bundleIdentifier, !ex.contains(id), id != Bundle.main.bundleIdentifier else { return false }
+                return seen.insert(id).inserted
+            }
+            .sorted { ($0.localizedName ?? "") .localizedCaseInsensitiveCompare($1.localizedName ?? "") == .orderedAscending }
+    }
+
+    private func setExcluded(_ ids: [String]) { excludedRaw = ids.joined(separator: "\n") }
+
+    private func refresh() {
+        status.axTrusted = AXIsProcessTrusted()
+        status.trackpads = MultitouchMonitor.shared.deviceCount
+        status.conflict = Prefs.gestureConflict(fingers: fingers)
+        status.loginStatus = SMAppService.mainApp.status
+        status.screenRecording = CGPreflightScreenCaptureAccess()
+    }
+
+    private func setLaunchAtLogin(_ on: Bool) {
+        do {
+            if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+            status.loginError = nil
+        } catch {
+            status.loginError = error.localizedDescription
+        }
+        status.loginStatus = SMAppService.mainApp.status
+    }
+
+    private func note(_ text: String, color: Color = .secondary) -> some View {
+        Text(text).font(.caption).foregroundStyle(color).fixedSize(horizontal: false, vertical: true)
+    }
+
+    static func name(for bundleID: String) -> String {
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+            return FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: "")
+        }
+        return bundleID
+    }
+
+    static func icon(for bundleID: String) -> NSImage {
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+            return NSWorkspace.shared.icon(forFile: url.path)
+        }
+        return NSImage(systemSymbolName: "app", accessibilityDescription: nil) ?? NSImage()
+    }
+}

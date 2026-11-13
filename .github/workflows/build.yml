@@ -1,0 +1,25 @@
+# Builds the app from the code in this repo and checks it contains no networking code.
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-latest   # Apple Silicon runner
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Build SwipeSwitch.app
+        run: ./build.sh
+
+      - name: Check for networking code (source and binary)
+        run: ./scripts/check-no-network.sh build/SwipeSwitch.app/Contents/MacOS/SwipeSwitch
