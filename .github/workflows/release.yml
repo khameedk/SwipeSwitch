@@ -49,6 +49,9 @@ jobs:
           BUNDLE: ${{ steps.attest.outputs.bundle-path }}
         run: |
           cp "$BUNDLE" "SwipeSwitch-$TAG.zip.sigstore.json"
+          # The same signed SLSA provenance as a standard .intoto.jsonl file (one signed DSSE envelope per line).
+          python3 -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1]))["dsseEnvelope"], separators=(",", ":")))' \
+            "$BUNDLE" > "SwipeSwitch-$TAG.zip.intoto.jsonl"
           cat > notes.md <<NOTES
           ### Install
 
@@ -68,4 +71,5 @@ jobs:
           This checks it was built by this repository's release workflow from tag $TAG.
           NOTES
           gh release create "$TAG" --title "SwipeSwitch $TAG" --notes-file notes.md --generate-notes \
-            "SwipeSwitch-$TAG.zip" "SwipeSwitch-$TAG.zip.sha256" "SwipeSwitch-$TAG.zip.sigstore.json"
+            "SwipeSwitch-$TAG.zip" "SwipeSwitch-$TAG.zip.sha256" "SwipeSwitch-$TAG.zip.sigstore.json" \
+            "SwipeSwitch-$TAG.zip.intoto.jsonl"
