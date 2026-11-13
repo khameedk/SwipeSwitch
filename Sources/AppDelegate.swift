@@ -7,12 +7,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var windowTracker: WindowTracker!
     private var switcher: SwitcherController!
     private let recognizer = SwipeGestureRecognizer()
+    private let keyboard = KeyboardSwitcher()
     private var settingsWindow: NSWindow?
     private var devicePoll: Timer?
     private var demoCancels = false
 
     func applicationWillTerminate(_ notification: Notification) {
         BetterTouchTool.setActive(false)
+        keyboard.stop()   // gives ⌘Tab back to macOS if we took it
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -23,7 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         setupStatusItem()
 
         recognizer.onBegin = { [weak self] in
-            guard let self = self else { return false }
+            guard let self = self, !self.keyboard.isActive else { return false }
             self.recognizer.allowVertical = Prefs.layout == .grid
             return self.switcher.begin()
         }
@@ -31,6 +33,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         recognizer.onEnd = { [weak self] in
             guard let self = self else { return }
             if self.demoCancels { self.switcher.cancel() } else { self.switcher.commit() }
+        }
+
+        // ⌘Tab (optional). Restore macOS's ⌘Tab first if a previous run quit without doing so.
+        KeyboardSwitcher.restoreSystemCommandTabIfWeChangedIt()
+        keyboard.onOpen = { [weak self] startAtEnd in self?.switcher.begin(startAtEnd: startAtEnd, haptics: false) ?? false }
+        keyboard.onStep = { [weak self] dx, dy in self?.switcher.step(dx: dx, dy: dy) }
+        keyboard.onCommit = { [weak self] in self?.switcher.commit() }
+        keyboard.onCancel = { [weak self] in self?.switcher.cancel() }
+        keyboard.isGestureActive = { [weak self] in self?.recognizer.isActive ?? false }
+        keyboard.apply()
+        NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            guard let self = self, Prefs.keyboardTrigger != self.keyboard.isRunning else { return }
+            self.keyboard.apply()
         }
 
         let mt = MultitouchMonitor.shared
@@ -47,6 +62,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         devicePoll = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             guard let self = self, !self.recognizer.isActive else { return }
             if mt.attachedDeviceCount() != mt.deviceCount { mt.restart() }
+            // Accessibility may have been granted since launch.
+            if Prefs.keyboardTrigger && !self.keyboard.isRunning { self.keyboard.apply() }
         }
 
         if !Prefs.d.bool(forKey: Prefs.Key.didOnboard) {
@@ -55,9 +72,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if !AXIsProcessTrusted() { Activator.promptForAccessibility() }
         }
 
+        if ProcessInfo.processInfo.environment["SWIPESWITCH_KEYDEMO"] != nil { runKeyboardDemo() }
+
         if let demo = ProcessInfo.processInfo.environment["SWIPESWITCH_DEMO"] {
             demoCancels = demo != "commit"
             runDemo()
+        }
+    }
+
+    /// Plays ⌘Tab, Tab, ⇧Tab, →, ↓ through the keyboard handler (nothing is sent to the system), then Esc.
+    private func runKeyboardDemo() {
+        let dir = ProcessInfo.processInfo.environment["SWIPESWITCH_SNAPSHOT_DIR"]
+        let cmd: CGEventFlags = .maskCommand
+        let steps: [(String, CGEventType, CGKeyCode, CGEventFlags)] = [
+            ("cmd-tab", .keyDown, 48, cmd), ("tab", .keyDown, 48, cmd), ("tab", .keyDown, 48, cmd),
+            ("shift-tab", .keyDown, 48, [cmd, .maskShift]), ("shift-up", .flagsChanged, 56, cmd),
+            ("shift-press", .flagsChanged, 56, [cmd, .maskShift]), ("shift-release", .flagsChanged, 56, cmd),
+            ("right", .keyDown, 124, cmd), ("down", .keyDown, 125, cmd),
+            ("escape", .keyDown, 53, cmd),
+        ]
+        for (i, step) in steps.enumerated() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5 + Double(i) * 0.8) { [weak self] in
+                guard let self = self else { return }
+                self.keyboard.simulate(type: step.1, keyCode: step.2, flags: step.3)
+                NSLog("SwipeSwitch: key demo \(step.0) -> selected \(self.switcher.model.selected) active=\(self.keyboard.isActive)")
+                if let dir = dir, step.0 == "down" { self.switcher.snapshot(to: "\(dir)/keyboard.png") }
+            }
         }
     }
 

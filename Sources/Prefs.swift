@@ -22,7 +22,9 @@ enum Prefs {
         static let legacyStep = "stepDistance"
         static let activation = "activationMillimetres"
         static let bttIntegration = "bttIntegration"
-        static let bttSharedSecret = "bttSharedSecret"   // old setting: fraction of trackpad width
+        static let bttSharedSecret = "bttSharedSecret"
+        static let keyboardTrigger = "keyboardTrigger"
+        static let disabledSystemCommandTab = "disabledSystemCommandTab"   // old setting: fraction of trackpad width
         static let haptics = "haptics"
         static let scope = "scope"
         static let maxApps = "maxApps"
@@ -48,6 +50,7 @@ enum Prefs {
         Key.activation: 4.0,
         Key.bttIntegration: false,
         Key.bttSharedSecret: "",
+        Key.keyboardTrigger: false,
         Key.haptics: true,
         Key.scope: Scope.all.rawValue,
         Key.maxApps: 24,
@@ -91,6 +94,7 @@ enum Prefs {
     /// Finger travel per step, in millimetres.
     static var stepMillimetres: Double { min(max(d.double(forKey: Key.step), 2), 30) }
     /// Finger travel that opens the switcher, in millimetres.
+    static var keyboardTrigger: Bool { d.bool(forKey: Key.keyboardTrigger) }
     static var bttIntegration: Bool { d.bool(forKey: Key.bttIntegration) }
     static var bttSharedSecret: String { d.string(forKey: Key.bttSharedSecret) ?? "" }
     static var activationMillimetres: Double { min(max(d.double(forKey: Key.activation), 1), 30) }

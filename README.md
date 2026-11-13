@@ -50,6 +50,21 @@ To update later, run `git pull` and `./build.sh --install` again. Your settings 
 | Swipe down / up (grid layout) | Moves to the next / previous row |
 | Lift your fingers | Switches to the selected app or window |
 
+**Keyboard (optional):** turn on Settings › Keyboard › **Open with ⌘Tab** to use the same switcher from
+the keyboard, in place of macOS's own app switcher:
+
+| Keys | What happens |
+| --- | --- |
+| ⌘Tab | Opens the switcher with the next app (or window) selected (⌘⇧Tab starts at the last) |
+| Tab (⌘ held) | Moves forward |
+| Shift (⌘ held) | Moves back one; holding Shift and tapping Tab keeps moving back |
+| ← → ↑ ↓ (⌘ held) | Moves left / right, or between rows in the grid |
+| Esc / Return | Cancels / switches right away |
+| Release ⌘ | Switches to the selected app or window |
+
+Only one app can own ⌘Tab: if you use another switcher on ⌘Tab (such as AltTab), quit it or change its
+shortcut. SwipeSwitch gives ⌘Tab back to macOS when you turn the option off or quit.
+
 **Tip:** If macOS already uses three-finger side swipes on your Mac (for "swipe between pages",
 "swipe between full-screen apps" or three-finger drag), SwipeSwitch's settings show a warning and
 a button to change it. You can also switch SwipeSwitch to four fingers.
@@ -61,6 +76,7 @@ Open them from the menu bar icon › **Settings…**
 | Section | Options |
 | --- | --- |
 | General | Enable/disable, launch at login |
+| Keyboard | Open with ⌘Tab (off by default) |
 | Gesture | Three or four fingers · start by swiping right or left · distance to open and distance per step (mm) · haptic feedback and strength |
 | Switching | Apps or windows · all desktops or current desktop · sort by last active or name · include minimized windows · include hidden apps' windows · how many items · excluded apps |
 | Appearance | Grid or single row · columns · icon size · show every name · wrap around at the ends |
@@ -120,13 +136,17 @@ internet, and it collects, stores and sends nothing about you, your apps or your
 
 | Permission | Required? | What it's used for |
 | --- | --- | --- |
-| **Accessibility** | Yes | Bringing the app or window you pick to the front (including on other desktops), reading window titles and whether a window is minimized, and noticing which window you last focused so the list is in the right order. |
+| **Accessibility** | Yes | Watching for ⌘Tab (only if you turn on the keyboard option), bringing the app or window you pick to the front (including on other desktops), reading window titles and whether a window is minimized, and noticing which window you last focused so the list is in the right order. |
 | **Screen Recording** | Optional | Only to read the *titles* of windows on other desktops before you've visited them. SwipeSwitch never captures, records or saves screen images. |
 
 What else it touches:
 
 - **Trackpad input** is read through macOS's touch framework, which needs no permission. Only finger
   positions are used, and only while a gesture is in progress.
+- **Keyboard input** (only if you turn on "Open with ⌘Tab"): to catch ⌘Tab before macOS does, SwipeSwitch
+  receives every key press. It acts only on ⌘Tab and the keys listed above while its switcher is open;
+  every other key passes straight through untouched, and nothing is stored or sent. With the option off,
+  it doesn't listen to the keyboard at all.
 - **Settings** are stored in macOS's normal preferences for the app (`io.github.khameedk.swipeswitch`).
 - **Window titles and focus order** are kept in memory while the app runs and are never written to disk.
 - **BetterTouchTool links** (only if you turn that option on): SwipeSwitch sends local `btt://` links to
@@ -162,6 +182,7 @@ window switchers do:
 - reading raw trackpad touches and driving the trackpad's haptic motor (`MultitouchSupport`)
 - finding windows on other desktops and telling real windows from closed ones (window-server calls)
 - matching Accessibility windows to their window IDs
+- switching off macOS's own ⌘Tab while the keyboard option is on (restored when you turn it off or quit)
 
 These are looked up at runtime, and the app falls back gracefully if one is missing. A future macOS
 update could still change them, so if something stops working after an update, please open an issue.

@@ -18,6 +18,7 @@ struct SettingsView: View {
     @AppStorage(Prefs.Key.activation) private var activation = 4.0
     @AppStorage(Prefs.Key.bttIntegration) private var bttIntegration = false
     @AppStorage(Prefs.Key.bttSharedSecret) private var bttSharedSecret = ""
+    @AppStorage(Prefs.Key.keyboardTrigger) private var keyboardTrigger = false
     @AppStorage(Prefs.Key.haptics) private var haptics = true
     @AppStorage(Prefs.Key.scope) private var scope: Scope = .all
     @AppStorage(Prefs.Key.maxApps) private var maxApps = 24
@@ -99,6 +100,14 @@ struct SettingsView: View {
                     }
                 }
                 note(howItWorks)
+            }
+
+            Section("Keyboard") {
+                Toggle("Open with ⌘Tab (replaces the macOS app switcher)", isOn: $keyboardTrigger)
+                note("Hold ⌘ and press Tab to open it on the next app. While ⌘ is held: Tab moves forward, Shift moves back, arrow keys move around, Esc cancels. Release ⌘ to switch. Needs Accessibility access.")
+                if keyboardTrigger && altTabRunning {
+                    note("AltTab is running and also uses ⌘Tab. Quit it or change its shortcut, or both switchers will open.", color: .orange)
+                }
             }
 
             Section("Switching") {
@@ -214,6 +223,10 @@ struct SettingsView: View {
         .onAppear(perform: refresh)
         .onReceive(timer) { _ in refresh() }
         .onChange(of: fingers) { _ in refresh() }
+    }
+
+    private var altTabRunning: Bool {
+        !NSRunningApplication.runningApplications(withBundleIdentifier: "com.lwouis.alt-tab-macos").isEmpty
     }
 
     private var howItWorks: String {

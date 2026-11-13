@@ -202,7 +202,14 @@ final class SwitcherController {
     }
 
     /// Opens the switcher with the previous app/window selected. Returns false if there's nothing to switch to.
-    func begin() -> Bool {
+    /// Haptics only make sense for trackpad sessions (you feel them through the trackpad).
+    private var sessionHaptics = true
+
+    /// - Parameters:
+    ///   - startAtEnd: select the last item (⌘⇧Tab) instead of the one after the current app/window.
+    ///   - haptics: whether to click the trackpad on each step.
+    func begin(startAtEnd: Bool = false, haptics: Bool = true) -> Bool {
+        sessionHaptics = haptics
         let screen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) } ?? NSScreen.main
         guard let vis = screen?.visibleFrame else { return false }
 
@@ -236,7 +243,7 @@ final class SwitcherController {
         if let c = currentIndex, c >= items.count { currentIndex = nil }   // trimmed off the end
         model.currentIndex = currentIndex
         // Start on the item after the current one (the previous app/window when sorted by last active).
-        model.selected = currentIndex.map { ($0 + 1) % items.count } ?? 0
+        model.selected = startAtEnd ? items.count - 1 : (currentIndex.map { ($0 + 1) % items.count } ?? 0)
         model.appeared = false
 
         let size = style.panelSize(count: items.count, columns: cols)
@@ -315,7 +322,7 @@ final class SwitcherController {
     }
 
     private func haptic() {
-        guard Prefs.haptics else { return }
+        guard Prefs.haptics, sessionHaptics else { return }
         if !MultitouchMonitor.shared.haptic(strength: Prefs.hapticStrength.actuationID) {
             NSLog("SwipeSwitch: trackpad haptics unavailable, using system haptics")
             NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
