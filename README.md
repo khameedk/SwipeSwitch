@@ -30,7 +30,19 @@ through them, then lift your fingers to switch. It works like ⌘-Tab, but on th
 
 ## Install
 
-### Option 1: Download
+### Option 1: Homebrew
+
+```bash
+brew tap khameedk/tap
+brew trust --cask khameedk/tap/swipeswitch
+brew install --cask khameedk/tap/swipeswitch
+```
+
+Homebrew asks you to trust casks from outside its own catalogue before installing them; the `brew trust`
+line does that for SwipeSwitch only. Then follow steps 2 and 3 below (Open Anyway, Accessibility). Update
+with `brew upgrade --cask swipeswitch`.
+
+### Option 2: Download
 
 1. Download the latest **SwipeSwitch-vX.Y.Z.zip** from [Releases](https://github.com/khameedk/SwipeSwitch/releases/latest),
    unzip it, and move **SwipeSwitch.app** to Applications.
@@ -47,7 +59,7 @@ gh attestation verify SwipeSwitch-vX.Y.Z.zip --repo khameedk/SwipeSwitch
 
 To update, download the newest release and replace the app. Your settings and permissions are kept.
 
-### Option 2: Build from source
+### Option 3: Build from source
 
 Build it on your own Mac, so you can read everything it does first and macOS doesn't block it as a download.
 
