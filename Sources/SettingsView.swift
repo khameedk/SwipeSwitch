@@ -4,7 +4,6 @@ import SwiftUI
 
 final class SettingsStatus: ObservableObject {
     @Published var axTrusted = AXIsProcessTrusted()
-    @Published var trackpads = MultitouchMonitor.shared.deviceCount
     @Published var conflict: String?
     @Published var loginStatus = SMAppService.mainApp.status
     @Published var loginError: String?
@@ -201,15 +200,6 @@ struct SettingsView: View {
                     }
                     note("Without it, windows on other desktops show their app name until you've visited them once. SwipeSwitch never records your screen.")
                 }
-                HStack {
-                    Label(status.trackpads > 0 ? "\(status.trackpads) trackpad\(status.trackpads == 1 ? "" : "s") detected" : "No trackpad detected",
-                          systemImage: "hand.point.up.left")
-                    Spacer()
-                    Button("Restart tracking") {
-                        MultitouchMonitor.shared.restart()
-                        status.trackpads = MultitouchMonitor.shared.deviceCount
-                    }
-                }
             }
 
             Section {
@@ -249,7 +239,6 @@ struct SettingsView: View {
 
     private func refresh() {
         status.axTrusted = AXIsProcessTrusted()
-        status.trackpads = MultitouchMonitor.shared.deviceCount
         status.conflict = Prefs.gestureConflict(fingers: fingers)
         status.loginStatus = SMAppService.mainApp.status
         status.screenRecording = CGPreflightScreenCaptureAccess()

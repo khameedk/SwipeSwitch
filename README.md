@@ -168,11 +168,13 @@ update could still change them, so if something stops working after an update, p
 
 ## Troubleshooting
 
-- **Nothing happens when I swipe.** Check the menu bar icon: "Enabled" should be ticked, and Settings
-  should show a trackpad detected. Look for a gesture-conflict warning in Settings › Gesture.
+- **Nothing happens when I swipe.** Check the menu bar icon: "Enabled" should be ticked, and the menu
+  shows "No trackpad detected" if SwipeSwitch can't see one. Look for a gesture-conflict warning in
+  Settings › Gesture.
 - **The switcher opens but doesn't switch apps.** Grant Accessibility access (Settings › Status shows
   whether it's granted). If it's already on, remove SwipeSwitch from the Accessibility list and add it again.
-- **It stopped responding after waking from sleep.** Use Settings › Status › **Restart tracking**.
+- **It stopped responding after waking from sleep.** SwipeSwitch reconnects to the trackpad after
+  waking on its own; if it still doesn't respond, quit it from the menu bar icon and open it again.
 - **The menu bar icon is missing** on a Mac with a notch. macOS hides icons behind the notch when the
   menu bar is crowded. Quit a few menu bar apps or use a menu bar manager.
 
