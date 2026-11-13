@@ -14,7 +14,7 @@ jobs:
   build:
     runs-on: macos-latest   # Apple Silicon runner
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
