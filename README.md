@@ -85,17 +85,23 @@ Scripting**. We recommend also setting a **shared secret** there (otherwise any 
 BTT commands); enter the same secret in SwipeSwitch › Settings › BetterTouchTool. BTT may ask once
 whether to allow the links.
 
-**3. In BTT, add a condition to each clashing gesture.** For every three-finger swipe gesture that could
-clash (left, right, up or down, in **For All Apps** and in any app-specific settings):
+**3. In BTT, add a condition to each three-finger swipe gesture.** This covers every
+**3 Finger Swipe Left, Right, Up or Down** you have, both under **For All Apps** and in each app's own
+settings (for example, an app-specific "3 Finger Swipe Left"). For each one:
 
-1. Select the app in BTT's left list and click the gesture.
-2. In the gesture's settings on the right, open **Advanced Conditions…** and add the condition
-   `swipeswitch_active` **is not** `1`. Save.
+1. In BTT's configuration window, select **For All Apps** or the app in the left list.
+2. Click the gesture.
+3. In the gesture's settings on the right, open **Advanced Conditions…**.
+4. Add one condition: variable `swipeswitch_active`, **is not**, value `1`. Save.
 
-BTT still notices the swipe, but skips its action while the switcher is open, using BTT's
-[Advanced Trigger Conditions](https://docs.folivora.ai/docs/actions/conditions/). Outside the switcher the
-gesture works exactly as before. To find the gestures, BTT's **Search All Triggers** button (below the
-app list) can help.
+BTT's **Search All Triggers** button (below the app list) can help you find them all. This uses BTT's
+[Advanced Trigger Conditions](https://docs.folivora.ai/docs/actions/conditions/): BTT still notices the
+swipe, but skips its action while the switcher is open. Outside the switcher, the gesture works exactly as
+before.
+
+**4. Check it.** With an app in front that has one of these gestures, swipe right with three fingers to
+open the switcher, swipe back left, then lift your fingers: the BTT action should **not** run. A plain
+three-finger swipe left, without the switcher, should still run it.
 
 Notes:
 
