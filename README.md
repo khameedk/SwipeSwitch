@@ -9,10 +9,17 @@ Switch apps and windows on your Mac with a trackpad swipe.
 Swipe right with three fingers and a switcher appears with your recent apps. Keep swiping to move
 through them, then lift your fingers to switch. It works like ⌘-Tab, but on the trackpad.
 
+<p align="center">
+  <img src="docs/images/swipeswitch-demo.gif" width="720"
+       alt="Animation: three fingers swipe right on a trackpad, the SwipeSwitch overlay appears with a grid of app icons, the highlight moves right three apps and down one row, and lifting the fingers switches to the selected app.">
+</p>
+<p align="center"><sub>Illustration with made-up apps.</sub></p>
+
 - **Apps or windows.** Switch between apps, or between individual windows (shown with their titles).
 - **Grid or row.** In the grid, your most recent apps are on the top row; swipe down for older ones.
 - **All desktops or just this one.** Include apps/windows from every desktop (Space) or only the current one.
 - **Smooth and tactile.** A sliding highlight follows your fingers, with a haptic click on each step.
+- **Or use the keyboard.** Optionally open the same switcher with ⌘Tab, in place of macOS's own.
 - **Lives in the menu bar.** Every option is in its Settings window.
 
 ## Requirements
@@ -65,9 +72,35 @@ the keyboard, in place of macOS's own app switcher:
 Only one app can own ⌘Tab: if you use another switcher on ⌘Tab (such as AltTab), quit it or change its
 shortcut. SwipeSwitch gives ⌘Tab back to macOS when you turn the option off or quit.
 
-**Tip:** If macOS already uses three-finger side swipes on your Mac (for "swipe between pages",
-"swipe between full-screen apps" or three-finger drag), SwipeSwitch's settings show a warning and
-a button to change it. You can also switch SwipeSwitch to four fingers.
+**Windows mode** shows each window on its own, with its title, so two browser windows appear separately:
+
+<p align="center">
+  <img src="docs/images/windows-mode.png" width="720"
+       alt="The SwipeSwitch overlay in windows mode: a grid of window tiles, each with an app icon and a window title such as 'Inbox (3)' or 'Trip planning — Browser', with one tile highlighted.">
+</p>
+
+## Gesture conflicts
+
+SwipeSwitch uses three-finger swipes: **right** to open the switcher, then **left, right, up and down**
+to move around while it's open. Anything else on your Mac that responds to three-finger swipes can fire
+at the same time. Check these before you start:
+
+- **macOS's own gestures** (System Settings › Trackpad › More Gestures, and Accessibility › Pointer
+  Control › Trackpad Options):
+  - *Swipe between pages* or *Swipe between full-screen applications* set to three fingers clash with
+    the side swipes. SwipeSwitch's Settings warns about these and has a button to open Trackpad settings.
+  - *Three-finger drag* clashes with every swipe (it drags windows instead). Settings warns about it too.
+  - *Mission Control* or *App Exposé* set to three-finger swipe up/down clash with moving between rows in
+    the grid. Settings doesn't detect this one, so check it yourself, or use the single-row layout.
+- **Other gesture apps** such as BetterTouchTool see every touch too. macOS gives each app its own copy of
+  the trackpad input, so SwipeSwitch **can't block** another app from reacting. For BetterTouchTool, see
+  [Using it with BetterTouchTool](#using-it-with-bettertouchtool).
+- **The first few millimetres** of a swipe happen before the switcher opens, so a gesture another app
+  recognizes that early can't be paused, even with the BetterTouchTool setup. Lowering
+  *Swipe distance to open* narrows that window.
+
+If three-finger swipes are taken, switch SwipeSwitch to **four fingers** (Settings › Gesture). macOS
+uses four-finger swipes for desktops and Mission Control by default, so turn those off first.
 
 ## Settings
 
@@ -234,6 +267,12 @@ SWIPESWITCH_DEMO=1 build/SwipeSwitch.app/Contents/MacOS/SwipeSwitch
 
 Add `SWIPESWITCH_SNAPSHOT_DIR=/some/folder` to save PNG snapshots of the overlay and settings window
 (SwipeSwitch's own windows only) into that folder.
+
+**README images** are drawn from scratch with made-up apps (no real screenshots). To regenerate them:
+
+```bash
+swift docs/make_media.swift docs/images
+```
 
 ## License
 
