@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var switcher: SwitcherController!
     private let recognizer = SwipeGestureRecognizer()
     private let keyboard = KeyboardSwitcher()
+    private let escape = EscapeWatcher()
     private var settingsWindow: NSWindow?
     private var devicePoll: Timer?
     private var demoCancels = false
@@ -27,7 +28,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         recognizer.onBegin = { [weak self] in
             guard let self = self, !self.keyboard.isActive else { return false }
             self.recognizer.allowVertical = Prefs.layout == .grid
-            return self.switcher.begin()
+            guard self.switcher.begin() else { return false }
+            self.escape.start()   // Esc can cancel while the switcher is open
+            return true
         }
         recognizer.onStep = { [weak self] dx, dy in self?.switcher.step(dx: dx, dy: dy) }
         recognizer.onTouchDown = { [weak self] in
@@ -35,7 +38,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         recognizer.onEnd = { [weak self] in
             guard let self = self else { return }
+            self.escape.stop()
+            if ProcessInfo.processInfo.environment["SWIPESWITCH_DEMO"] != nil { NSLog("SwipeSwitch: demo fingers lifted -> %@", self.demoCancels ? "cancel" : "switch") }
             if self.demoCancels { self.switcher.cancel() } else { self.switcher.commit() }
+        }
+        escape.onEscape = { [weak self] in
+            guard let self = self, self.switcher.isShowing, !self.keyboard.isActive else { return }
+            self.escape.stop()
+            self.recognizer.abandon()   // so lifting the fingers afterwards doesn't switch
+            self.switcher.cancel()
+            if ProcessInfo.processInfo.environment["SWIPESWITCH_DEMO"] != nil { NSLog("SwipeSwitch: demo Esc -> cancelled") }
         }
 
         // ⌘Tab (optional). Restore macOS's ⌘Tab first if a previous run quit without doing so.
@@ -281,6 +293,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             Timer.scheduledTimer(withTimeInterval: 0.01, repeats: true) { [weak self] t in
                 guard let self = self, i < frames.count else { t.invalidate(); return }
                 self.recognizer.simulate(frames[i])
+                if i == snap1, ProcessInfo.processInfo.environment["SWIPESWITCH_DEMO_ESC"] != nil { self.escape.simulateEscape() }
                 if let dir = dir, let k = [snap1, snap2].firstIndex(of: i) {
                     self.switcher.snapshot(to: "\(dir)/overlay\(k + 1).png")
                 }

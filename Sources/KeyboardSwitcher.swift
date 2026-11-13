@@ -163,3 +163,51 @@ private let keyTapCallback: CGEventTapCallBack = { _, type, event, refcon in
     guard let refcon else { return Unmanaged.passUnretained(event) }
     return Unmanaged<KeyboardSwitcher>.fromOpaque(refcon).takeUnretainedValue().handle(type: type, event: event)
 }
+
+/// While a switcher opened by a trackpad swipe is on screen, catches Esc (and only Esc) so it can cancel.
+/// It listens only for as long as the switcher is open; every other key passes straight through.
+final class EscapeWatcher {
+    var onEscape: (() -> Void)?
+
+    private var tap: CFMachPort?
+    private var source: CFRunLoopSource?
+
+    func start() {
+        guard tap == nil else { return }
+        guard let t = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap,
+                                        eventsOfInterest: CGEventMask(1 << CGEventType.keyDown.rawValue),
+                                        callback: escapeTapCallback,
+                                        userInfo: Unmanaged.passUnretained(self).toOpaque()) else { return }
+        tap = t
+        source = CFMachPortCreateRunLoopSource(nil, t, 0)
+        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+        CGEvent.tapEnable(tap: t, enable: true)
+    }
+
+    func stop() {
+        if let t = tap { CGEvent.tapEnable(tap: t, enable: false) }
+        if let s = source { CFRunLoopRemoveSource(CFRunLoopGetMain(), s, .commonModes) }
+        tap = nil
+        source = nil
+    }
+
+    fileprivate func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            if let t = tap { CGEvent.tapEnable(tap: t, enable: true) }
+            return Unmanaged.passUnretained(event)
+        }
+        guard type == .keyDown, event.getIntegerValueField(.keyboardEventKeycode) == 53 else {
+            return Unmanaged.passUnretained(event)
+        }
+        DispatchQueue.main.async { [weak self] in self?.onEscape?() }
+        return nil   // Esc was for the switcher, so the app in front doesn't also get it
+    }
+
+    /// Used by demo mode (nothing is sent to the system).
+    func simulateEscape() { onEscape?() }
+}
+
+private let escapeTapCallback: CGEventTapCallBack = { _, type, event, refcon in
+    guard let refcon else { return Unmanaged.passUnretained(event) }
+    return Unmanaged<EscapeWatcher>.fromOpaque(refcon).takeUnretainedValue().handle(type: type, event: event)
+}

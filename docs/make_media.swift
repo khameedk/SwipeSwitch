@@ -276,7 +276,9 @@ func drawOverlay(_ l: Layout, at origin: NSPoint, items: [(MockApp, String)], hi
     NSGraphicsContext.saveGraphicsState()
     shape.addClip()
     ctx.draw(backdropBlur, in: CGRect(origin: .zero, size: canvas))
-    rgb(246, 246, 248, 0.82).setFill(); shape.fill()
+    // The real panel (macOS "popover" material) looks like an even light grey in light mode; a solid fill matches it
+    // (any see-through blur turns into colour blotches in a 256-colour GIF).
+    rgb(242, 242, 245, 1).setFill(); shape.fill()
     NSGraphicsContext.restoreGraphicsState()
     rgb(0, 0, 0, 0.10).setStroke(); let border = rounded(frame.insetBy(dx: 0.5, dy: 0.5), 22); border.lineWidth = 1; border.stroke()
     rgb(0, 0, 0, 0.10).setFill(); rounded(highlight, 14).fill()

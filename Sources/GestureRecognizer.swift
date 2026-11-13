@@ -111,6 +111,11 @@ final class SwipeGestureRecognizer {
         }
     }
 
+    /// Drops the current swipe (e.g. Esc was pressed): the rest of it, including lifting the fingers, is ignored.
+    func abandon() {
+        if phase == .active { phase = .rejected }
+    }
+
     /// Feed frames from code (used by the demo mode).
     func simulate(_ f: TouchFrame) { handle(f) }
 

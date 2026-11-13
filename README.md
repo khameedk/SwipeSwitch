@@ -10,7 +10,7 @@ Swipe right with three fingers and a switcher appears with your recent apps. Kee
 through them, then lift your fingers to switch. It works like ⌘-Tab, but on the trackpad.
 
 <p align="center">
-  <img src="docs/images/swipeswitch-demo-6fa69d16.gif" width="720"
+  <img src="docs/images/swipeswitch-demo-93120264.gif" width="720"
        alt="Animation on a mock desktop: three fingers swipe right on a trackpad, a frosted SwipeSwitch overlay appears over a Safari window showing a grid of windows, each with its app icon and title, the highlight moves right to 'Project ideas', on to 'Library', then back to 'Project ideas', and lifting the fingers brings that Notes window to the front.">
 </p>
 <p align="center"><sub>Illustration on a mock desktop: window contents are made up; app icons are macOS's own.</sub></p>
@@ -56,6 +56,7 @@ To update later, run `git pull` and `./build.sh --install` again. Your settings 
 | Keep swiping right / left | Moves forward (older) / back |
 | Swipe down / up (grid layout) | Moves to the next / previous row |
 | Lift your fingers | Switches to the selected app or window |
+| Press Esc | Cancels: the switcher closes and lifting your fingers won't switch |
 
 **Keyboard (optional):** turn on Settings › Keyboard › **Open with ⌘Tab** to use the same switcher from
 the keyboard, in place of macOS's own app switcher:
@@ -75,7 +76,7 @@ shortcut. SwipeSwitch gives ⌘Tab back to macOS when you turn the option off or
 **Windows mode** shows each window on its own, with its title, so two browser windows appear separately:
 
 <p align="center">
-  <img src="docs/images/windows-mode-9b22c6d6.png" width="720"
+  <img src="docs/images/windows-mode-379511cb.png" width="720"
        alt="The SwipeSwitch overlay in windows mode over a mock Safari window: a row of window tiles, each with an app icon and a window title such as 'Inbox (3)' or 'Trip planning', with one tile highlighted.">
 </p>
 
@@ -176,10 +177,15 @@ What else it touches:
 
 - **Trackpad input** is read through macOS's touch framework, which needs no permission. Only finger
   positions are used, and only while a gesture is in progress.
-- **Keyboard input** (only if you turn on "Open with ⌘Tab"): to catch ⌘Tab before macOS does, SwipeSwitch
-  receives every key press. It acts only on ⌘Tab and the keys listed above while its switcher is open;
-  every other key passes straight through untouched, and nothing is stored or sent. With the option off,
-  it doesn't listen to the keyboard at all.
+- **Keyboard input:**
+  - *While a switcher opened by a swipe is on screen*, SwipeSwitch watches for **Esc** so you can cancel.
+    It acts on Esc only, lets every other key through untouched, and stops listening as soon as the
+    switcher closes.
+  - *If you turn on "Open with ⌘Tab"*, it receives every key press so it can catch ⌘Tab before macOS
+    does. It acts only on ⌘Tab and the keys listed above while its switcher is open; every other key
+    passes straight through untouched.
+  - Nothing typed is stored or sent. With ⌘Tab off and no switcher on screen, it doesn't listen to the
+    keyboard at all.
 - **Settings** are stored in macOS's normal preferences for the app (`io.github.khameedk.swipeswitch`).
 - **Window titles and focus order** are kept in memory while the app runs and are never written to disk.
 - **BetterTouchTool links** (only if you turn that option on): SwipeSwitch sends local `btt://` links to
