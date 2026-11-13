@@ -11,6 +11,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var devicePoll: Timer?
     private var demoCancels = false
 
+    func applicationWillTerminate(_ notification: Notification) {
+        BetterTouchTool.setActive(false)
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         Prefs.register()
         tracker = AppTracker()
@@ -32,6 +36,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let mt = MultitouchMonitor.shared
         mt.onFrame = { [weak self] f in self?.recognizer.handle(f) }
         let n = mt.start()
+        // If a previous run quit with the switcher open, don't leave BetterTouchTool paused.
+        BetterTouchTool.setActive(false)
         NSLog("SwipeSwitch: multitouch loaded=\(mt.isLoaded) devices=\(n) accessibility=\(AXIsProcessTrusted())")
 
         // Touch devices go quiet after sleep, and a Magic Trackpad can connect at any time.

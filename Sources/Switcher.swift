@@ -253,6 +253,7 @@ final class SwitcherController {
         let gen = generation
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { if gen == self.generation { self.panel.invalidateShadow() } }
         isShowing = true
+        BetterTouchTool.setActive(true)
         haptic()
         return true
     }
@@ -294,6 +295,7 @@ final class SwitcherController {
 
     private func hide() {
         isShowing = false
+        BetterTouchTool.setActive(false)
         generation += 1
         let gen = generation
         withAnimation(.easeOut(duration: 0.12)) { model.appeared = false }

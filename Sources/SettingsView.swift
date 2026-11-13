@@ -16,6 +16,9 @@ struct SettingsView: View {
     @AppStorage(Prefs.Key.fingers) private var fingers = 3
     @AppStorage(Prefs.Key.direction) private var direction: SwipeDirection = .right
     @AppStorage(Prefs.Key.step) private var step = 8.0
+    @AppStorage(Prefs.Key.activation) private var activation = 4.0
+    @AppStorage(Prefs.Key.bttIntegration) private var bttIntegration = false
+    @AppStorage(Prefs.Key.bttSharedSecret) private var bttSharedSecret = ""
     @AppStorage(Prefs.Key.haptics) private var haptics = true
     @AppStorage(Prefs.Key.scope) private var scope: Scope = .all
     @AppStorage(Prefs.Key.maxApps) private var maxApps = 24
@@ -59,6 +62,13 @@ struct SettingsView: View {
                     Text("Left").tag(SwipeDirection.left)
                 }
                 .pickerStyle(.segmented)
+                LabeledContent("Swipe distance to open") {
+                    HStack {
+                        Slider(value: $activation, in: 2...12, step: 1)
+                        Text("\(Int(activation)) mm").monospacedDigit().foregroundStyle(.secondary).frame(width: 44, alignment: .trailing)
+                    }
+                    .frame(width: 240)
+                }
                 LabeledContent("Swipe distance per step") {
                     HStack {
                         Slider(value: $step, in: 4...16, step: 1)
@@ -153,6 +163,16 @@ struct SettingsView: View {
                 Toggle("Show names under every app", isOn: $showAllNames)
                     .disabled(mode == .windows)
                 Toggle("Wrap around at the ends", isOn: $wrap)
+            }
+
+            Section("BetterTouchTool") {
+                Toggle("Tell BetterTouchTool while the switcher is open", isOn: $bttIntegration)
+                if bttIntegration {
+                    LabeledContent("Shared secret") {
+                        SecureField("Optional", text: $bttSharedSecret).frame(width: 200)
+                    }
+                }
+                note("Sets the BTT variable “\(BetterTouchTool.variable)” to 1 while the switcher is open and 0 when it closes. In BTT, turn on “Allow external BetterTouchTool Scripting”, then give each three-finger swipe gesture the Advanced Condition “\(BetterTouchTool.variable) is not 1” so BTT skips it while you're switching. Only sent while BTT is running. See the README for details.")
             }
 
             Section("Status") {

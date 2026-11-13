@@ -61,11 +61,51 @@ Open them from the menu bar icon › **Settings…**
 | Section | Options |
 | --- | --- |
 | General | Enable/disable, launch at login |
-| Gesture | Three or four fingers · start by swiping right or left · distance per step (mm) · haptic feedback and strength |
+| Gesture | Three or four fingers · start by swiping right or left · distance to open and distance per step (mm) · haptic feedback and strength |
 | Switching | Apps or windows · all desktops or current desktop · sort by last active or name · include minimized windows · include hidden apps' windows · how many items · excluded apps |
 | Appearance | Grid or single row · columns · icon size · show every name · wrap around at the ends |
+| BetterTouchTool | Tell BTT while the switcher is open (off by default) · optional shared secret · see [Using it with BetterTouchTool](#using-it-with-bettertouchtool) |
 
 Apps without an open window are never shown.
+
+### Using it with BetterTouchTool
+
+macOS sends every trackpad touch to every app that listens, so BetterTouchTool sees your SwipeSwitch
+swipes too. While the switcher is open you move with three-finger swipes left, right, up and down, so
+BTT may also run any **three-finger swipe** gestures you have set up (for example, swiping back left
+could also trigger a BTT "3 Finger Swipe Left" shortcut in the app you're in). SwipeSwitch can't block
+another app's trackpad input, but it can tell BTT when the switcher is open so BTT skips those gestures.
+
+**1. In SwipeSwitch:** Settings › BetterTouchTool › turn on **Tell BetterTouchTool while the switcher
+is open**. SwipeSwitch then sets the BTT variable `swipeswitch_active` to `1` while the switcher is open
+and `0` when it closes, using BTT's [`btt://` links](https://docs.folivora.ai/docs/scripting/url-scheme/).
+
+**2. In BTT, allow the links:** Settings › Scripting BTT › turn on **Allow external BetterTouchTool
+Scripting**. We recommend also setting a **shared secret** there (otherwise any app or web page can send
+BTT commands); enter the same secret in SwipeSwitch › Settings › BetterTouchTool. BTT may ask once
+whether to allow the links.
+
+**3. In BTT, add a condition to each clashing gesture.** For every three-finger swipe gesture that could
+clash (left, right, up or down, in **For All Apps** and in any app-specific settings):
+
+1. Select the app in BTT's left list and click the gesture.
+2. In the gesture's settings on the right, open **Advanced Conditions…** and add the condition
+   `swipeswitch_active` **is not** `1`. Save.
+
+BTT still notices the swipe, but skips its action while the switcher is open, using BTT's
+[Advanced Trigger Conditions](https://docs.folivora.ai/docs/actions/conditions/). Outside the switcher the
+gesture works exactly as before. To find the gestures, BTT's **Search All Triggers** button (below the
+app list) can help.
+
+Notes:
+
+- SwipeSwitch only sends these links while BTT is already running (a `btt://` link would otherwise launch
+  it), and it resets the variable to `0` when it starts and quits.
+- A gesture that BTT recognizes in the first few millimetres of a swipe, before the switcher opens, can
+  still run. Gestures you make *inside* the switcher (swiping back, changing rows) are covered.
+- What didn't work, in case you're tempted: a Conditional Activation Group with **Disable BetterTouchTool
+  completely**, BTT's **Disable Gesture Recognition** action, and toggling BTT off and on by link (once
+  BTT is off it ignores links, including the one to turn it back on).
 
 ## Permissions and privacy
 
@@ -83,6 +123,8 @@ What else it touches:
   positions are used, and only while a gesture is in progress.
 - **Settings** are stored in macOS's normal preferences for the app (`io.github.khameedk.swipeswitch`).
 - **Window titles and focus order** are kept in memory while the app runs and are never written to disk.
+- **BetterTouchTool links** (only if you turn that option on): SwipeSwitch sends local `btt://` links to
+  BTT on your Mac saying whether the switcher is open. Nothing else is sent, and nothing leaves your Mac.
 
 You can check all of this in the source: everything lives in [`Sources/`](Sources) (about 1,700 lines of Swift).
 
