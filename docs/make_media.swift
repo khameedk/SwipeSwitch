@@ -298,20 +298,21 @@ func drawOverlay(_ l: Layout, at origin: NSPoint, items: [(MockApp, String)], hi
 // MARK: - Trackpad inset with three finger dots and a caption
 
 func drawTrackpadInset(fingers: NSPoint?, fingerAlpha: CGFloat, caption: String) {
-    let card = NSRect(x: 18, y: 84, width: 176, height: 136)
-    rgb(20, 20, 28, 0.72).setFill(); rounded(card, 14).fill()
-    let pad = NSRect(x: card.minX + 18, y: card.minY + 38, width: card.width - 36, height: 82)
-    rgb(255, 255, 255, 0.10).setFill(); rounded(pad, 9).fill()
-    rgb(255, 255, 255, 0.35).setStroke(); let b = rounded(pad, 9); b.lineWidth = 1.2; b.stroke()
+    // A slim strip between the switcher and the dock: a mini trackpad with three finger dots, then the caption.
+    let card = NSRect(x: 400 - 130, y: 74, width: 260, height: 44)
+    rgb(20, 20, 28, 0.72).setFill(); rounded(card, 12).fill()
+    let pad = NSRect(x: card.minX + 9, y: card.minY + 7, width: 50, height: 30)
+    rgb(255, 255, 255, 0.10).setFill(); rounded(pad, 5).fill()
+    rgb(255, 255, 255, 0.40).setStroke(); let b = rounded(pad, 5); b.lineWidth = 1; b.stroke()
     if let f = fingers, fingerAlpha > 0 {
-        for dx in [-16.0, 0.0, 16.0] {
-            let p = NSPoint(x: pad.minX + f.x * pad.width + dx, y: pad.minY + f.y * pad.height + (dx == 0 ? 5 : 0))
-            NSColor.white.withAlphaComponent(0.9 * fingerAlpha).setFill()
-            NSBezierPath(ovalIn: NSRect(x: p.x - 7, y: p.y - 7, width: 14, height: 14)).fill()
+        for dx in [-6.5, 0.0, 6.5] {
+            let p = NSPoint(x: pad.minX + f.x * pad.width + dx, y: pad.minY + f.y * pad.height + (dx == 0 ? 2 : 0))
+            NSColor.white.withAlphaComponent(0.95 * fingerAlpha).setFill()
+            NSBezierPath(ovalIn: NSRect(x: p.x - 3.2, y: p.y - 3.2, width: 6.4, height: 6.4)).fill()
         }
     }
-    text(caption, in: NSRect(x: card.minX + 8, y: card.minY + 10, width: card.width - 16, height: 20), size: 11.5, weight: .semibold,
-         color: .white, align: .center)
+    text(caption, in: NSRect(x: pad.maxX + 10, y: card.minY + 13, width: card.maxX - pad.maxX - 18, height: 18), size: 12.5,
+         weight: .semibold, color: .white, align: .left)
 }
 
 func ease(_ t: CGFloat) -> CGFloat { let c = max(0, min(1, t)); return 1 - pow(1 - c, 3) }
@@ -328,8 +329,12 @@ do {
     let desktops: [Front: CGImage] = [.browser: render(canvas) { drawDesktop(canvas, front: .browser) },
                                       .notes: render(canvas) { drawDesktop(canvas, front: .notes) }]
     let blurs = desktops.mapValues { blurred($0, radius: 30) }
-    let items = allApps.map { ($0, $0.name) }
-    let layout = Layout(columns: 5, count: items.count, cellW: 92, cellH: 98, icon: 60)
+    // Windows mode, as the app draws it: a title under every tile (two lines), 64-pt icons, 150-pt tiles.
+    let items: [(MockApp, String)] = [
+        (browser, "Weekend recipes"), (mail, "Inbox (3)"), (notes, "Project ideas"), (photos, "Library"),
+        (browser, "Trip planning"), (terminal, "~/projects — zsh"), (music, "Focus playlist"), (files, "Downloads"),
+    ]
+    let layout = Layout(columns: 4, count: items.count, cellW: 150, cellH: 64 + 21 + 28, icon: 64)
     let origin = NSPoint(x: (canvas.width - layout.size.width) / 2, y: (canvas.height - layout.size.height) / 2 + 20)
 
     // (time, selected, finger x/y on the pad, caption)
@@ -364,7 +369,7 @@ do {
 
         frames.append(render(canvas) {
             NSGraphicsContext.current!.cgContext.draw(desktop, in: CGRect(origin: .zero, size: canvas))
-            drawOverlay(layout, at: origin, items: items, highlight: hl, selected: selected, allLabels: false,
+            drawOverlay(layout, at: origin, items: items, highlight: hl, selected: selected, allLabels: true,
                         backdropBlur: switched ? blurs[.notes]! : blurs[.browser]!, canvas: canvas, alpha: overlayAlpha, zoom: zoom)
             drawTrackpadInset(fingers: finger, fingerAlpha: fingerAlpha, caption: caption)
         })
@@ -393,7 +398,7 @@ do {
         (browser, "Weekend recipes"), (notes, "Project ideas"), (mail, "Inbox (3)"),
         (browser, "Trip planning"), (terminal, "~/projects — zsh"), (music, "Focus playlist"),
     ]
-    let layout = Layout(columns: 6, count: items.count, cellW: 118, cellH: 108, icon: 56)
+    let layout = Layout(columns: 6, count: items.count, cellW: 118, cellH: 64 + 21 + 28, icon: 64)
     let origin = NSPoint(x: (canvas.width - layout.size.width) / 2, y: (canvas.height - layout.size.height) / 2 + 10)
     let image = render(canvas) {
         NSGraphicsContext.current!.cgContext.draw(desktop, in: CGRect(origin: .zero, size: canvas))

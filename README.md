@@ -10,8 +10,8 @@ Swipe right with three fingers and a switcher appears with your recent apps. Kee
 through them, then lift your fingers to switch. It works like ⌘-Tab, but on the trackpad.
 
 <p align="center">
-  <img src="docs/images/swipeswitch-demo-b22e6bf6.gif" width="720"
-       alt="Animation on a mock desktop: three fingers swipe right on a trackpad, a frosted SwipeSwitch overlay appears over a Safari window with a grid of macOS app icons, the highlight moves right two apps, one more, then back one to Notes, and lifting the fingers brings the Notes window to the front.">
+  <img src="docs/images/swipeswitch-demo-6fa69d16.gif" width="720"
+       alt="Animation on a mock desktop: three fingers swipe right on a trackpad, a frosted SwipeSwitch overlay appears over a Safari window showing a grid of windows, each with its app icon and title, the highlight moves right to 'Project ideas', on to 'Library', then back to 'Project ideas', and lifting the fingers brings that Notes window to the front.">
 </p>
 <p align="center"><sub>Illustration on a mock desktop: window contents are made up; app icons are macOS's own.</sub></p>
 
@@ -75,7 +75,7 @@ shortcut. SwipeSwitch gives ⌘Tab back to macOS when you turn the option off or
 **Windows mode** shows each window on its own, with its title, so two browser windows appear separately:
 
 <p align="center">
-  <img src="docs/images/windows-mode-461a0845.png" width="720"
+  <img src="docs/images/windows-mode-9b22c6d6.png" width="720"
        alt="The SwipeSwitch overlay in windows mode over a mock Safari window: a row of window tiles, each with an app icon and a window title such as 'Inbox (3)' or 'Trip planning', with one tile highlighted.">
 </p>
 
