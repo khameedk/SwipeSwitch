@@ -150,6 +150,7 @@ final class KeyboardSwitcher {
         }
     }
 
+    #if SWIPESWITCH_DEV
     /// Feeds a key event straight to the handler (used by demo mode; nothing is posted to the system).
     func simulate(type: CGEventType, keyCode: CGKeyCode, flags: CGEventFlags) {
         guard let event = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: type != .keyUp) else { return }
@@ -157,6 +158,7 @@ final class KeyboardSwitcher {
         event.flags = flags
         _ = handle(type: type, event: event)
     }
+    #endif
 }
 
 private let keyTapCallback: CGEventTapCallBack = { _, type, event, refcon in
@@ -203,8 +205,10 @@ final class EscapeWatcher {
         return nil   // Esc was for the switcher, so the app in front doesn't also get it
     }
 
+    #if SWIPESWITCH_DEV
     /// Used by demo mode (nothing is sent to the system).
     func simulateEscape() { onEscape?() }
+    #endif
 }
 
 private let escapeTapCallback: CGEventTapCallBack = { _, type, event, refcon in

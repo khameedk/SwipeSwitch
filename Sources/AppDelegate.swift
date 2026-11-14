@@ -11,7 +11,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let escape = EscapeWatcher()
     private var settingsWindow: NSWindow?
     private var devicePoll: Timer?
+    #if SWIPESWITCH_DEV
     private var demoCancels = false
+    #endif
 
     func applicationWillTerminate(_ notification: Notification) {
         BetterTouchTool.setActive(false, wait: true)
@@ -20,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Prefs.register()
+        BTTSecret.preload()   // also moves a secret saved by an earlier version out of preferences
         tracker = AppTracker()
         windowTracker = WindowTracker()
         switcher = SwitcherController(apps: tracker, windows: windowTracker)
@@ -39,15 +42,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         recognizer.onEnd = { [weak self] in
             guard let self = self else { return }
             self.escape.stop()
+            #if SWIPESWITCH_DEV
             if ProcessInfo.processInfo.environment["SWIPESWITCH_DEMO"] != nil { NSLog("SwipeSwitch: demo fingers lifted -> %@", self.demoCancels ? "cancel" : "switch") }
-            if self.demoCancels { self.switcher.cancel() } else { self.switcher.commit() }
+            if self.demoCancels { self.switcher.cancel(); return }
+            #endif
+            self.switcher.commit()
         }
         escape.onEscape = { [weak self] in
             guard let self = self, self.switcher.isShowing, !self.keyboard.isActive else { return }
             self.escape.stop()
             self.recognizer.abandon()   // so lifting the fingers afterwards doesn't switch
             self.switcher.cancel()
+            #if SWIPESWITCH_DEV
             if ProcessInfo.processInfo.environment["SWIPESWITCH_DEMO"] != nil { NSLog("SwipeSwitch: demo Esc -> cancelled") }
+            #endif
         }
 
         // ⌘Tab (optional). Restore macOS's ⌘Tab first if a previous run quit without doing so.
@@ -77,6 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         devicePoll = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             guard let self = self, !self.recognizer.isActive else { return }
+            _ = SessionLog.enabled   // turns diagnostic logging off once its hour is up
             SessionLog.timed("checking for trackpads") { if mt.attachedDeviceCount() != mt.deviceCount { mt.restart() } }
             // Accessibility may have been granted since launch.
             if Prefs.keyboardTrigger && !self.keyboard.isRunning { self.keyboard.apply() }
@@ -91,8 +100,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Warm up the overlay so the first open is as quick as later ones.
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.switcher.warmUp() }
 
+        #if SWIPESWITCH_DEV
+        runDevHooks()
+        #endif
+    }
+
+    // MARK: Development hooks
+    // Built only with `./build.sh --dev` (the SWIPESWITCH_DEV flag). Release builds don't contain this code, so no
+    // environment variable can make the shipped app switch windows, edit BTT gestures or save screenshots.
+    #if SWIPESWITCH_DEV
+    private func runDevHooks() {
         if ProcessInfo.processInfo.environment["SWIPESWITCH_KEYDEMO"] != nil { runKeyboardDemo() }
-        // Development aid: SWIPESWITCH_BTT_TEST=scan lists BTT's swipe gestures (read-only);
+        // SWIPESWITCH_BTT_TEST=scan lists BTT's swipe gestures (read-only);
         // SWIPESWITCH_BTT_TEST=<gesture uuid> adds the condition to that one gesture, then removes it again. Then quits.
         if let test = ProcessInfo.processInfo.environment["SWIPESWITCH_BTT_TEST"] { runBTTTest(test) }
 
@@ -122,6 +141,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
     }
+    #endif
 
     // MARK: Menu bar
 
@@ -259,6 +279,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settingsWindow?.makeKeyAndOrderFront(nil)
     }
 
+    #if SWIPESWITCH_DEV
     private func runBTTTest(_ test: String) {
         DispatchQueue.global().async {
             func show(_ gs: [BTTGestureSetup.Gesture]) {
@@ -357,4 +378,5 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
     }
+    #endif
 }

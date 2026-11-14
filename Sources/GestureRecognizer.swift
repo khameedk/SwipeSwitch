@@ -129,7 +129,9 @@ final class SwipeGestureRecognizer {
     }
 
     /// Feed frames from code (used by the demo mode).
+    #if SWIPESWITCH_DEV
     func simulate(_ f: TouchFrame) { handle(f) }
+    #endif
 
     private func finish(_ reason: String) {
         let now = CACurrentMediaTime()

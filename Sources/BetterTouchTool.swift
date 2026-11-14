@@ -32,13 +32,14 @@ enum BetterTouchTool {
     static func setActive(_ active: Bool, wait: Bool = false) {
         guard Prefs.bttIntegration, isRunning else { return }
         let value = active ? "1" : "0"
-        let secret = Prefs.bttSharedSecret
         if wait {
+            let secret = queue.sync { Prefs.bttSharedSecret }
             let sent = queue.sync { permission(ask: false) == noErr && sendEvent(value: value, secret: secret) }
             if !sent { openLink(value: value, secret: secret) }
             return
         }
         queue.async {
+            let secret = Prefs.bttSharedSecret   // read here, off the main thread (it comes from the Keychain)
             if permission(ask: true) == noErr, sendEvent(value: value, secret: secret) { return }
             DispatchQueue.main.async { openLink(value: value, secret: secret) }
         }

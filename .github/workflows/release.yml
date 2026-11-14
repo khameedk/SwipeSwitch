@@ -5,6 +5,8 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  # Run by hand for a dry run: loads the certificate, builds, signs and checks, but publishes nothing.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -24,26 +26,56 @@ jobs:
           persist-credentials: false
 
       - name: Set the app version from the tag
+        if: github.ref_type == 'tag'
         run: plutil -replace CFBundleShortVersionString -string "${TAG#v}" Info.plist
 
+      # The "SwipeSwitch Signing" certificate (self-signed, kept as repository secrets) goes into a throwaway keychain
+      # for this run only. Signing with it is what lets macOS keep users' permissions across updates while refusing
+      # anything else that claims to be SwipeSwitch.
+      - name: Load the signing certificate
+        env:
+          CERT_P12: ${{ secrets.SIGNING_CERT_P12 }}
+          CERT_PASSWORD: ${{ secrets.SIGNING_CERT_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD=$(openssl rand -hex 16)
+          printf '%s' "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 3600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          rm -f "$RUNNER_TEMP/cert.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+
       - name: Build SwipeSwitch.app
+        env:
+          SWIPESWITCH_REQUIRE_CERT: "1"   # fail rather than ship an ad-hoc build
         run: ./build.sh
+
+      - name: Check the app is signed with the release certificate
+        run: |
+          codesign --verify --strict build/SwipeSwitch.app
+          codesign -d -r- build/SwipeSwitch.app 2>&1 | grep -q "certificate leaf = H\"$(./build.sh --print-cert-sha1)\""
 
       - name: Check for networking code (source and binary)
         run: ./scripts/check-no-network.sh build/SwipeSwitch.app/Contents/MacOS/SwipeSwitch
 
       - name: Zip the app and record its checksum
+        if: github.ref_type == 'tag'
         run: |
           ditto -c -k --sequesterRsrc --keepParent build/SwipeSwitch.app "SwipeSwitch-$TAG.zip"
           shasum -a 256 "SwipeSwitch-$TAG.zip" > "SwipeSwitch-$TAG.zip.sha256"
 
       - name: Sign build provenance
+        if: github.ref_type == 'tag'
         id: attest
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: SwipeSwitch-${{ github.ref_name }}.zip
 
       - name: Publish the release
+        if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
           BUNDLE: ${{ steps.attest.outputs.bundle-path }}

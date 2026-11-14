@@ -25,7 +25,9 @@ enum Prefs {
         static let bttSharedSecret = "bttSharedSecret"
         static let keyboardTrigger = "keyboardTrigger"
         static let disabledSystemCommandTab = "disabledSystemCommandTab"
-        static let diagnosticLogging = "diagnosticLogging"   // old setting: fraction of trackpad width
+        static let diagnosticLogging = "diagnosticLogging"
+        /// When diagnostic logging turns itself off (seconds since 1970; 0 = not running).
+        static let diagnosticLoggingUntil = "diagnosticLoggingUntil"
         static let haptics = "haptics"
         static let scope = "scope"
         static let maxApps = "maxApps"
@@ -98,7 +100,8 @@ enum Prefs {
     /// Finger travel that opens the switcher, in millimetres.
     static var keyboardTrigger: Bool { d.bool(forKey: Key.keyboardTrigger) }
     static var bttIntegration: Bool { d.bool(forKey: Key.bttIntegration) }
-    static var bttSharedSecret: String { d.string(forKey: Key.bttSharedSecret) ?? "" }
+    /// Kept in the Keychain (see BTTSecret); `Key.bttSharedSecret` is only read to move an old value there.
+    static var bttSharedSecret: String { BTTSecret.value }
     static var activationMillimetres: Double { min(max(d.double(forKey: Key.activation), 1), 30) }
     static var haptics: Bool { d.bool(forKey: Key.haptics) }
     static var scope: Scope { Scope(rawValue: d.string(forKey: Key.scope) ?? "") ?? .all }

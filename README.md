@@ -158,7 +158,9 @@ another app's trackpad input, but it can tell BTT when the switcher is open so B
 **1. In BTT, allow scripting (once):** Settings › Scripting BTT › turn on **Allow external
 BetterTouchTool Scripting**. We recommend also setting a **shared secret** there (otherwise any app or web
 page can send BTT commands); enter the same secret in SwipeSwitch › Settings › BetterTouchTool. BTT may ask
-once whether to allow these commands.
+once whether to allow these commands. SwipeSwitch keeps its copy of the secret in your login Keychain; after
+each SwipeSwitch update, macOS asks once for your login password to let the new version read it (click
+**Always Allow**).
 
 **2. In SwipeSwitch:** Settings › BetterTouchTool › turn on **Tell BetterTouchTool while the switcher
 is open**, with BTT running.
@@ -227,15 +229,19 @@ What else it touches:
     passes straight through untouched.
   - Nothing typed is stored or sent. With ⌘Tab off and no switcher on screen, it doesn't listen to the
     keyboard at all.
-- **Settings** are stored in macOS's normal preferences for the app (`io.github.khameedk.swipeswitch`).
+- **Settings** are stored in macOS's normal preferences for the app (`io.github.khameedk.swipeswitch`),
+  except the BTT shared secret, which is kept in your login Keychain.
 - **Window titles and focus order** are kept in memory while the app runs and are never written to disk.
 - **BetterTouchTool** (only if you turn that option on): SwipeSwitch tells BTT on your Mac whether the
   switcher is open (by AppleScript command, or by `btt://` link if you didn't allow that), and adds or
   removes the condition on BTT's swipe gestures when you click Add or Remove. Nothing else is sent, and
   nothing leaves your Mac.
-- **Diagnostic log** (off by default, Settings › Diagnostics): records each switch (when it opened, how the
-  swipe ended, which app it switched to and whether it landed) in macOS's log on your Mac. App names only:
-  no keystrokes or window titles.
+- **Diagnostic log** (off by default, Settings › Diagnostics; turns itself off after an hour): records each switch (when it opened, how the
+  swipe ended, which app it switched to and whether it landed, and any step that was slow) in macOS's log
+  on your Mac. App names only: no keystrokes or window titles.
+- **Hardening:** the app runs with macOS's hardened runtime, so other programs can't load their code into
+  SwipeSwitch to borrow its permissions. Release builds contain no demo or test code (see
+  [Development](#development)).
 
 You can check all of this in the source: everything lives in [`Sources/`](Sources) (about 1,700 lines of Swift).
 
@@ -245,10 +251,10 @@ Every change to this repo is checked automatically on GitHub:
 
 | Check | What it does |
 | --- | --- |
-| **Build** | Builds the app from exactly the code in the repo, then runs [`scripts/check-no-network.sh`](scripts/check-no-network.sh), which fails if the source contains networking code or the built app imports networking functions. |
+| **Build** | Builds the app from exactly the code in the repo (and the `--dev` variant, so the test hooks keep compiling), then runs [`scripts/check-no-network.sh`](scripts/check-no-network.sh), which fails if the source contains networking code or the built app imports networking functions. |
 | **CodeQL** | GitHub's code scanner looks for security problems in the Swift code (also weekly). |
 | **OpenSSF Scorecard** | Rates the repo's security practices; the score is the badge at the top. |
-| **Release** | Tagged versions are built on GitHub, checked for networking code, and published with a checksum and a signed build-provenance record. |
+| **Release** | Tagged versions are built on GitHub, signed with the project's own code-signing certificate (so macOS keeps your permissions across updates and refuses anything else claiming to be SwipeSwitch), checked for networking code, and published with a checksum and a signed build-provenance record. |
 | **Dependabot** | Keeps the GitHub Actions used above up to date. The app itself has no third-party dependencies. |
 
 You can run the network check yourself after building:
@@ -306,6 +312,7 @@ update could still change them, so if something stops working after an update, p
 ```bash
 ./build.sh            # builds build/SwipeSwitch.app
 ./build.sh --install  # also installs to /Applications and opens it
+./build.sh --dev      # includes the demo and test hooks below (left out of normal and release builds)
 ```
 
 | File | What it does |
@@ -318,7 +325,8 @@ update could still change them, so if something stops working after an update, p
 | `Activator.swift` | Brings the chosen app or window to the front |
 | `SettingsView.swift`, `AppDelegate.swift`, `Prefs.swift` | Settings window, menu bar menu and preferences |
 
-**Demo mode** plays a scripted swipe so you can check the overlay without touching the trackpad:
+**Demo mode** (in a `--dev` build) plays a scripted swipe so you can check the overlay without touching the
+trackpad:
 
 ```bash
 SWIPESWITCH_DEMO=1 build/SwipeSwitch.app/Contents/MacOS/SwipeSwitch

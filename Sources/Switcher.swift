@@ -407,12 +407,14 @@ final class SwitcherController {
         })
     }
 
+    #if SWIPESWITCH_DEV
     /// Renders the overlay's current contents to a PNG (used by demo mode for visual checks).
     func snapshot(to path: String) {
         guard let view = panel.contentView, let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
         view.cacheDisplay(in: view.bounds, to: rep)
         try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
     }
+    #endif
 
     private func haptic() {
         guard Prefs.haptics, sessionHaptics else { return }

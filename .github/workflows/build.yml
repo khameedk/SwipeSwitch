@@ -18,6 +18,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Build the development variant (demo and test hooks)
+        run: ./build.sh --dev
+
       - name: Build SwipeSwitch.app
         run: ./build.sh
 

@@ -17,9 +17,9 @@ struct SettingsView: View {
     @AppStorage(Prefs.Key.step) private var step = 8.0
     @AppStorage(Prefs.Key.activation) private var activation = 4.0
     @AppStorage(Prefs.Key.bttIntegration) private var bttIntegration = false
-    @AppStorage(Prefs.Key.bttSharedSecret) private var bttSharedSecret = ""
     @AppStorage(Prefs.Key.keyboardTrigger) private var keyboardTrigger = false
     @AppStorage(Prefs.Key.diagnosticLogging) private var diagnosticLogging = false
+    @AppStorage(Prefs.Key.diagnosticLoggingUntil) private var diagnosticLoggingUntil = 0.0
     @AppStorage(Prefs.Key.haptics) private var haptics = true
     @AppStorage(Prefs.Key.scope) private var scope: Scope = .all
     @AppStorage(Prefs.Key.maxApps) private var maxApps = 24
@@ -180,7 +180,9 @@ struct SettingsView: View {
                     .onChange(of: bttIntegration) { on in if on { bttSetup.check(ask: true) } }
                 if bttIntegration {
                     LabeledContent("Shared secret") {
-                        SecureField("Optional", text: $bttSharedSecret).frame(width: 200)
+                        // Kept in the Keychain (BTTSecret), not in preferences.
+                        SecureField("Optional", text: Binding(get: { BTTSecret.value }, set: { BTTSecret.set($0) }))
+                            .frame(width: 200)
                     }
                     if BetterTouchTool.externalScriptingAllowed == false {
                         note("In BetterTouchTool, turn on Settings › Scripting BTT › “Allow external BetterTouchTool Scripting”.", color: .red)
@@ -221,7 +223,11 @@ struct SettingsView: View {
 
             Section("Diagnostics") {
                 Toggle("Log switcher activity (for troubleshooting)", isOn: $diagnosticLogging)
-                note("Records each switch (when it opened, how the swipe ended, which app it switched to, and whether it landed) in macOS's log on this Mac. App names only: no keystrokes or window titles. Leave it off unless you're tracking down a problem.")
+                    .onChange(of: diagnosticLogging) { SessionLog.settingChanged(on: $0) }
+                if diagnosticLogging, diagnosticLoggingUntil > 0 {
+                    note("Turns itself off at \(Date(timeIntervalSince1970: diagnosticLoggingUntil).formatted(date: .omitted, time: .shortened)).")
+                }
+                note("Turn it on while a problem is happening; it turns itself off after an hour. Records each switch (when it opened, how the swipe ended, which app it switched to, whether it landed, and any step that was slow) in macOS's log on this Mac. App names only: no keystrokes or window titles.")
             }
 
             Section {
