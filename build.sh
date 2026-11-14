@@ -41,7 +41,7 @@ cp build/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 # its permissions). The entitlements file allows the one thing that then needs permission: Apple Events to BTT.
 IDENTITY="SwipeSwitch Signing"
 ID="io.github.khameedk.swipeswitch"
-CERT_SHA1=$(security find-certificate -c "$IDENTITY" -Z 2>/dev/null | awk '/^SHA-1 hash:/ { print tolower($3); exit }')
+CERT_SHA1=$( (security find-certificate -c "$IDENTITY" -Z 2>/dev/null || true) | awk '/^SHA-1 hash:/ { print tolower($3); exit }')
 if [ "${SWIPESWITCH_REQUIRE_CERT:-}" = 1 ] && [ -n "$CERT_SHA1" ] && [ "$CERT_SHA1" != "$RELEASE_CERT_SHA1" ]; then
   echo "error: found a \"$IDENTITY\" certificate, but not the release one ($RELEASE_CERT_SHA1)" >&2; exit 1
 fi
