@@ -42,6 +42,8 @@ enum Prefs {
         static let iconSize = "iconSize"
         /// Widest the switcher may get, as a percentage of the screen's width.
         static let maxWidthPercent = "maxWidthPercent"
+        /// Point size of the names under the icons.
+        static let labelSize = "labelSize"
         static let showAllNames = "showAllNames"
         static let appearSpeed = "appearSpeed"
         static let wrap = "wrapAround"
@@ -71,6 +73,7 @@ enum Prefs {
         Key.columns: 6,
         Key.iconSize: 64.0,
         Key.maxWidthPercent: 92.0,
+        Key.labelSize: 11.0,
         Key.showAllNames: false,
         Key.appearSpeed: AppearSpeed.quick.rawValue,
         Key.wrap: false,
@@ -120,6 +123,7 @@ enum Prefs {
     static var layout: Layout { Layout(rawValue: d.string(forKey: Key.layout) ?? "") ?? .grid }
     static var columns: Int { max(1, d.integer(forKey: Key.columns)) }
     static var iconSize: Double { min(max(d.double(forKey: Key.iconSize), 24), 150) }
+    static var labelSize: Double { min(max(d.double(forKey: Key.labelSize), 10), 20) }
     static var maxWidthFraction: Double { min(max(d.double(forKey: Key.maxWidthPercent), 40), 100) / 100 }
     static var showAllNames: Bool { d.bool(forKey: Key.showAllNames) }
     static var appearSpeed: AppearSpeed { AppearSpeed(rawValue: d.string(forKey: Key.appearSpeed) ?? "") ?? .quick }

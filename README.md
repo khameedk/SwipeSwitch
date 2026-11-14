@@ -155,7 +155,7 @@ Open them from the menu bar icon › **Settings…**
 | Keyboard | Open with ⌘Tab (off by default) |
 | Gesture | Three or four fingers · start by swiping right or left · distance to open and distance per step (mm) · haptic feedback and strength |
 | Switching | Apps or windows · all desktops or current desktop · sort by last active or name · include minimized windows · include hidden apps' windows · how many items · excluded apps |
-| Appearance | Grid or single row · columns · icon size (40–150 pt) · maximum width (% of the screen, 92% by default) · show every name · show and hide the switcher instantly, quickly (default) or smoothly · wrap around at the ends |
+| Appearance | Grid or single row · columns · icon size (40–150 pt) · name size (10–20 pt) · maximum width (% of the screen, 92% by default) · show every name · show and hide the switcher instantly, quickly (default) or smoothly · wrap around at the ends |
 | BetterTouchTool | Tell BTT while the switcher is open (off by default) · optional shared secret · see [Using it with BetterTouchTool](#using-it-with-bettertouchtool) |
 
 Apps without an open window are never shown.

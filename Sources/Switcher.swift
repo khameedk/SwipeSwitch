@@ -19,16 +19,23 @@ struct CellStyle {
     var icon: CGFloat = 64
     var width: CGFloat = 92
     var labelLines = 1
+    /// Point size of the names under the icons.
+    var font: CGFloat = 11
 
     static let padding: CGFloat = 16
     static let spacing: CGFloat = 6
-    static let lineHeight: CGFloat = 14
 
-    var labelHeight: CGFloat { CGFloat(labelLines) * Self.lineHeight }
+    var lineHeight: CGFloat { ceil(font * 1.27) }   // 14 at the default 11 pt
+    var labelHeight: CGFloat { CGFloat(labelLines) * lineHeight }
     var height: CGFloat { icon + 21 + labelHeight }
 
-    static func apps(icon: CGFloat) -> CellStyle { CellStyle(icon: icon, width: icon + 28, labelLines: 1) }
-    static func windows(icon: CGFloat) -> CellStyle { CellStyle(icon: icon, width: max(icon + 28, 150), labelLines: 2) }
+    static func apps(icon: CGFloat, font: CGFloat) -> CellStyle {
+        CellStyle(icon: icon, width: icon + 28, labelLines: 1, font: font)
+    }
+    /// Window titles need room: tiles are at least 150 pt wide at 11 pt, wider for bigger names.
+    static func windows(icon: CGFloat, font: CGFloat) -> CellStyle {
+        CellStyle(icon: icon, width: max(icon + 28, (150 * font / 11).rounded()), labelLines: 2, font: font)
+    }
 
     func panelSize(count: Int, columns: Int) -> CGSize {
         let cols = max(1, min(columns, count))
@@ -118,7 +125,7 @@ struct SwitcherView: View {
                 .opacity(item.dimmed ? 0.45 : 1)
                 .scaleEffect(isSelected ? 1.06 : 1)
             Text(item.title)
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: style.font, weight: .medium))
                 .multilineTextAlignment(.center)
                 .lineLimit(style.labelLines)
                 .truncationMode(.tail)
@@ -229,7 +236,7 @@ final class SwitcherController {
         let (items, _) = makeItems()
         guard !isShowing, !items.isEmpty else { return }
         model.items = Array(items.prefix(2))
-        model.style = CellStyle.apps(icon: CGFloat(Prefs.iconSize))
+        model.style = CellStyle.apps(icon: CGFloat(Prefs.iconSize), font: CGFloat(Prefs.labelSize))
         model.columns = 2
         let size = model.style.panelSize(count: model.items.count, columns: 2)
         panel.setFrame(NSRect(origin: .zero, size: size), display: false)
@@ -262,7 +269,8 @@ final class SwitcherController {
 
         let windowsMode = Prefs.mode == .windows
         let icon = CGFloat(Prefs.iconSize)
-        var style = windowsMode ? CellStyle.windows(icon: icon) : CellStyle.apps(icon: icon)
+        let font = CGFloat(Prefs.labelSize)
+        var style = windowsMode ? CellStyle.windows(icon: icon, font: font) : CellStyle.apps(icon: icon, font: font)
         // Too many to fit across: the grid wraps to more rows; the single row wraps (windows) or shrinks icons (apps).
         let maxW = vis.width * Prefs.maxWidthFraction
         var cols: Int
@@ -275,7 +283,7 @@ final class SwitcherController {
                     cols = style.columnsThatFit(width: maxW)   // titles need their width: wrap instead of shrinking
                 } else {
                     let perCell = (maxW - CellStyle.padding * 2) / CGFloat(cols) - CellStyle.spacing
-                    style = CellStyle.apps(icon: max(24, floor(perCell - 28)))
+                    style = CellStyle.apps(icon: max(24, floor(perCell - 28)), font: font)
                 }
             }
         }

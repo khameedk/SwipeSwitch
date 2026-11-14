@@ -27,6 +27,7 @@ struct SettingsView: View {
     @AppStorage(Prefs.Key.columns) private var columns = 6
     @AppStorage(Prefs.Key.iconSize) private var iconSize = 64.0
     @AppStorage(Prefs.Key.maxWidthPercent) private var maxWidthPercent = 92.0
+    @AppStorage(Prefs.Key.labelSize) private var labelSize = 11.0
     @AppStorage(Prefs.Key.appearSpeed) private var appearSpeed: AppearSpeed = .quick
     @AppStorage(Prefs.Key.showAllNames) private var showAllNames = false
     @AppStorage(Prefs.Key.wrap) private var wrap = false
@@ -173,6 +174,12 @@ struct SettingsView: View {
                     HStack {
                         Slider(value: $iconSize, in: 40...150, step: 2).frame(width: 220)
                         Text("\(Int(iconSize)) pt").monospacedDigit().foregroundStyle(.secondary).frame(width: 48, alignment: .trailing)
+                    }
+                }
+                LabeledContent("Name size") {
+                    HStack {
+                        Slider(value: $labelSize, in: 10...20, step: 1).frame(width: 220)
+                        Text("\(Int(labelSize)) pt").monospacedDigit().foregroundStyle(.secondary).frame(width: 48, alignment: .trailing)
                     }
                 }
                 LabeledContent("Maximum width") {
