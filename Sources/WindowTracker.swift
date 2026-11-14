@@ -103,26 +103,51 @@ final class WindowTracker {
     /// Scanning every running process is slow (~20 ms: macOS looks up each one's app type), so it only happens
     /// at launch and then at most every `retryInterval`; new apps are caught by launch/activation notifications.
     private var lastFullScan = 0.0
-    /// Whether each window-owning program is a regular app. Looking that up costs ~1–2 ms per program, and it
-    /// doesn't change while the program runs, so it's cached and dropped when the program quits.
-    private var regularApps: [pid_t: NSRunningApplication?] = [:]
+    /// Window-owning programs known to be regular apps. Looking that up costs ~1–2 ms per program, so a "yes" is
+    /// cached until the program quits. A "no" is only trusted briefly: a program that has just launched may not be
+    /// marked as a regular app yet, and caching that forever would hide its windows until it quits again.
+    private var regularApps: [pid_t: NSRunningApplication] = [:]
+    private var notRegularUntil: [pid_t: Double] = [:]
+    private static let notRegularRecheck = 5.0
+
+    /// Forget what we know about a program's app type (it launched, came to the front, or quit).
+    private func forgetAppType(_ pid: pid_t) {
+        regularApps.removeValue(forKey: pid)
+        notRegularUntil.removeValue(forKey: pid)
+    }
+
+    /// The program as a regular app, or nil if it isn't one (checked again after `notRegularRecheck` seconds).
+    private func regularApp(_ pid: pid_t) -> NSRunningApplication? {
+        if let app = regularApps[pid] { return app }
+        let now = CACurrentMediaTime()
+        if let until = notRegularUntil[pid], now < until { return nil }
+        if let app = NSRunningApplication(processIdentifier: pid), app.activationPolicy == .regular {
+            regularApps[pid] = app
+            notRegularUntil.removeValue(forKey: pid)
+            return app
+        }
+        notRegularUntil[pid] = now + Self.notRegularRecheck
+        return nil
+    }
     private let myPID = ProcessInfo.processInfo.processIdentifier
 
     init() {
         let nc = NSWorkspace.shared.notificationCenter
         nc.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] n in
             guard let self, let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
+            self.forgetAppType(app.processIdentifier)
             self.ensureObserver(for: app, force: true)   // retry now in case it has finished launching
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { self.stampFocusedWindow(of: app.processIdentifier) }
         }
         nc.addObserver(forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main) { [weak self] n in
             guard let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
+            self?.forgetAppType(app.processIdentifier)
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { self?.ensureObserver(for: app, force: true) }
         }
         nc.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main) { [weak self] n in
             guard let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
             self?.lastAttempt.removeValue(forKey: app.processIdentifier)
-            self?.regularApps.removeValue(forKey: app.processIdentifier)
+            self?.forgetAppType(app.processIdentifier)
             guard let obs = self?.observers.removeValue(forKey: app.processIdentifier) else { return }
             CFRunLoopRemoveSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(obs), .defaultMode)
         }
@@ -219,11 +244,7 @@ final class WindowTracker {
         for w in all where (w[kCGWindowLayer as String] as? NSNumber)?.intValue == 0 {
             guard let pid = (w[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value, checked.insert(pid).inserted,
                   pid != myPID else { continue }
-            if regularApps[pid] == nil {
-                let app = NSRunningApplication(processIdentifier: pid)
-                regularApps[pid] = app?.activationPolicy == .regular ? app : .some(nil)
-            }
-            guard let app = regularApps[pid] ?? nil, !app.isTerminated, !excluded.contains(app.bundleIdentifier ?? "") else { continue }
+            guard let app = regularApp(pid), !app.isTerminated, !excluded.contains(app.bundleIdentifier ?? "") else { continue }
             apps[pid] = app
         }
 
