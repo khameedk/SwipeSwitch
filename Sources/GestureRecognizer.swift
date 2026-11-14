@@ -22,6 +22,12 @@ final class SwipeGestureRecognizer {
     private var lastFrameTime = 0.0
     private var watchdog: Timer?
 
+    // Diagnostics only (see SessionLog).
+    private var touchDownAt = 0.0
+    private var openedAt = 0.0
+    /// Finger counts of the last few frames while active, as (counted, all contacts reported).
+    private var recent: [(Int, Int)] = []
+
     var isActive: Bool { phase == .active }
 
     func handle(_ f: TouchFrame) {
@@ -43,6 +49,7 @@ final class SwipeGestureRecognizer {
             if f.count == n {
                 phase = .tracking
                 device = f.device
+                touchDownAt = now
                 startX = tx; startY = ty
                 armWatchdog()
                 onTouchDown?()
@@ -61,6 +68,9 @@ final class SwipeGestureRecognizer {
                 phase = .rejected            // wrong direction
             } else if dx > act && dx > abs(dy) {
                 if onBegin?() == true {
+                    SessionLog.note("swipe recognized \(ms(now - touchDownAt)) ms after touch-down")
+                    openedAt = CACurrentMediaTime()   // opening took a moment
+                    recent.removeAll()
                     phase = .active
                     anchorX = tx; anchorY = ty
                     lastCount = n
@@ -74,6 +84,8 @@ final class SwipeGestureRecognizer {
             if f.count == 0 { reset() }
 
         case .active:
+            recent.append((f.count, f.raw))
+            if recent.count > 6 { recent.removeFirst() }
             if f.count == n {
                 if lastCount != n { anchorX = tx; anchorY = ty }   // re-anchor after a finger blip
                 lowCountSince = nil
@@ -120,10 +132,14 @@ final class SwipeGestureRecognizer {
     func simulate(_ f: TouchFrame) { handle(f) }
 
     private func finish(_ reason: String) {
-        SessionLog.note("swipe ended: \(reason)")
+        let now = CACurrentMediaTime()
+        // Last frames as counted/reported: e.g. "0/3" means the trackpad still reported 3 contacts, but none touching.
+        SessionLog.note("swipe ended: \(reason) after \(ms(now - openedAt)) ms; last frames \(recent.map { "\($0.0)/\($0.1)" }.joined(separator: " "))")
         reset()
         onEnd?()
     }
+
+    private func ms(_ seconds: Double) -> Int { Int(seconds * 1000) }
 
     private func reset() {
         phase = .idle

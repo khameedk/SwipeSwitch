@@ -1,4 +1,5 @@
 import Foundation
+import QuartzCore
 
 /// One summarized trackpad frame: how many fingers are touching and where their centroid is.
 struct TouchFrame {
@@ -6,6 +7,10 @@ struct TouchFrame {
     var count: Int
     var x: Double   // 0 (left) ... 1 (right)
     var y: Double   // 0 (bottom) ... 1 (top)
+    /// Every contact the trackpad reported, including fingers landing or lifting (not counted in `count`).
+    var raw = 0
+    /// When the trackpad delivered the frame (CACurrentMediaTime), before it waited for the main thread.
+    var time = 0.0
 }
 
 /// Reads raw finger data from every trackpad through Apple's private MultitouchSupport framework.
@@ -144,6 +149,18 @@ final class MultitouchMonitor {
         return false
     }
 
+    private var lastLagNote = 0.0
+
+    /// Diagnostics: frames that waited a long time for the main thread. A busy main thread can open and close the
+    /// switcher in one go once it catches up, so the overlay is never drawn.
+    func noteLag(_ lag: Double) {
+        guard lag > 0.05, SessionLog.enabled else { return }
+        let now = CACurrentMediaTime()
+        guard now - lastLagNote > 0.5 else { return }
+        lastLagNote = now
+        SessionLog.problem("touch input waited \(Int(lag * 1000)) ms for the main thread")
+    }
+
     /// Number of trackpads currently attached (used to notice a Magic Trackpad being connected).
     func attachedDeviceCount() -> Int {
         guard let list = copyDeviceList() else { return 0 }
@@ -174,9 +191,11 @@ private let contactCallback: MTContactCallbackFunction = { device, touches, coun
     let frame = TouchFrame(device: UInt(bitPattern: device),
                            count: n,
                            x: n > 0 ? sx / Double(n) : 0,
-                           y: n > 0 ? sy / Double(n) : 0)
+                           y: n > 0 ? sy / Double(n) : 0,
+                           raw: Int(count), time: CACurrentMediaTime())
     DispatchQueue.main.async {
         let monitor = MultitouchMonitor.shared
+        if frame.time > 0 { monitor.noteLag(CACurrentMediaTime() - frame.time) }
         if frame.count > 0 { monitor.lastTouchedDevice = frame.device }
         monitor.onFrame?(frame)
     }

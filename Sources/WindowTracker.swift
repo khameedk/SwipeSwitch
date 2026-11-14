@@ -136,8 +136,10 @@ final class WindowTracker {
         nc.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] n in
             guard let self, let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
             self.forgetAppType(app.processIdentifier)
-            self.ensureObserver(for: app, force: true)   // retry now in case it has finished launching
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { self.stampFocusedWindow(of: app.processIdentifier) }
+            SessionLog.timed("watching \(app.localizedName ?? "?") for focus changes") {
+                self.ensureObserver(for: app, force: true)   // retry now in case it has finished launching
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { self.stampFocusedWindowSoon(of: app.processIdentifier) }
         }
         nc.addObserver(forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main) { [weak self] n in
             guard let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
@@ -185,36 +187,79 @@ final class WindowTracker {
         lastAttempt.removeValue(forKey: pid)
     }
 
+    /// Accessibility reads for focus tracking. They wait for the app to answer, which can be slow right after it was
+    /// switched to, so they stay off the main thread (touch input would wait too).
+    private static let axReads = DispatchQueue(label: "io.github.khameedk.swipeswitch.focus", qos: .userInitiated)
+
+    /// A window got focus (main thread). The time is taken now so the order stays right; the window's ID and title are
+    /// read in the background.
     fileprivate func noteFocused(_ window: AXUIElement) {
+        let at = CACurrentMediaTime()
+        Self.axReads.async { self.record(window, at: at) }
+    }
+
+    /// On `axReads`: looks up the window, then stamps it on the main thread.
+    private func record(_ window: AXUIElement, at: Double) {
         guard let id = PrivateAPI.windowID(of: window) else { return }
-        stamps[id] = CACurrentMediaTime()
-        if let t = Self.string(window, kAXTitleAttribute), !t.isEmpty { titles[id] = t }
+        let title = Self.string(window, kAXTitleAttribute)
+        DispatchQueue.main.async {
+            if (self.stamps[id] ?? 0) < at { self.stamps[id] = at }   // a newer stamp (e.g. from a switch) wins
+            if let title, !title.isEmpty { self.titles[id] = title }
+        }
+    }
+
+    /// Stamps an app's focused window, reading it in the background.
+    private func stampFocusedWindowSoon(of pid: pid_t) {
+        guard AXIsProcessTrusted() else { return }
+        let at = CACurrentMediaTime()
+        Self.axReads.async {
+            var win: CFTypeRef?
+            if AXUIElementCopyAttributeValue(AXUIElementCreateApplication(pid), kAXFocusedWindowAttribute as CFString, &win) == .success, let win {
+                self.record(win as! AXUIElement, at: at)
+            }
+        }
     }
 
     func noteActivated(_ id: CGWindowID) { stamps[id] = CACurrentMediaTime() }
 
+    /// Stamps an app's focused window right away (used while building the list, which needs it now). Limited to
+    /// `axBudget` per call like the rest of the list, since it runs on the main thread when fingers touch down.
     private func stampFocusedWindow(of pid: pid_t) {
         guard AXIsProcessTrusted() else { return }
         let el = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(el, Float(Self.axBudget))
         var win: CFTypeRef?
-        if AXUIElementCopyAttributeValue(el, kAXFocusedWindowAttribute as CFString, &win) == .success, let win {
-            noteFocused(win as! AXUIElement)
-        }
+        guard AXUIElementCopyAttributeValue(el, kAXFocusedWindowAttribute as CFString, &win) == .success, let win else { return }
+        let w = win as! AXUIElement
+        AXUIElementSetMessagingTimeout(w, Float(Self.axBudget))
+        guard let id = PrivateAPI.windowID(of: w) else { return }
+        stamps[id] = CACurrentMediaTime()
+        if let t = Self.string(w, kAXTitleAttribute), !t.isEmpty { titles[id] = t }
     }
 
     // MARK: Listing
 
     private struct AXInfo { let element: AXUIElement; let title: String; let minimized: Bool }
 
-    /// Windows on the current desktop as Accessibility sees them (nil if unavailable).
+    /// How long one app may take to describe its windows while the list is built. Normally a few milliseconds; an app
+    /// that's busy (often the one just switched away from) can take a second or more, and the list is built on the
+    /// main thread when fingers touch down, so a slow app would hold up the swipe. Past this, the app's windows are
+    /// listed from the window server alone (only its minimized windows are missed, for that one open).
+    private static let axBudget = 0.25
+
+    /// Windows on the current desktop as Accessibility sees them (nil if unavailable or too slow).
     /// Safe to call from any thread (no shared state).
     private static func axWindows(pid: pid_t) -> [CGWindowID: AXInfo]? {
+        let deadline = CACurrentMediaTime() + axBudget
         let el = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(el, Float(axBudget))
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(el, kAXWindowsAttribute as CFString, &value) == .success,
               let list = value as? [AXUIElement] else { return nil }
         var out: [CGWindowID: AXInfo] = [:]
         for w in list {
+            guard CACurrentMediaTime() < deadline else { return nil }   // partial info would hide windows; use none
+            AXUIElementSetMessagingTimeout(w, Float(axBudget))
             guard let id = PrivateAPI.windowID(of: w) else { continue }
             var minimized: CFTypeRef?
             AXUIElementCopyAttributeValue(w, kAXMinimizedAttribute as CFString, &minimized)
@@ -227,15 +272,15 @@ final class WindowTracker {
     /// most recently focused first.
     func candidates() -> [WindowEntry] {
         let trusted = AXIsProcessTrusted()
-        if trusted && CACurrentMediaTime() - lastFullScan > Self.retryInterval { ensureObservers() }
-        if let front = NSWorkspace.shared.frontmostApplication { stampFocusedWindow(of: front.processIdentifier) }
+        if trusted && CACurrentMediaTime() - lastFullScan > Self.retryInterval { SessionLog.timed("list: rescanning apps") { ensureObservers() } }
+        if let front = NSWorkspace.shared.frontmostApplication { SessionLog.timed("list: front window") { stampFocusedWindow(of: front.processIdentifier) } }
 
         let scope = Prefs.scope
         let includeMinimized = Prefs.includeMinimized
         let includeHidden = Prefs.includeHidden
         let excluded = Set(Prefs.excluded)
         let onScreen = Set(Self.windowIDs(onScreenOnly: true))
-        let visibleAnywhere = PrivateAPI.visibleWindowIDsOnAllDesktops()
+        let visibleAnywhere = SessionLog.timed("list: windows on all desktops") { PrivateAPI.visibleWindowIDsOnAllDesktops() }
         guard let all = CGWindowListCopyWindowInfo([.optionAll, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else { return [] }
 
         // Only look up the programs that own normal windows (a dozen or so), not every running process.
@@ -256,7 +301,7 @@ final class WindowTracker {
             for w in all where (w[kCGWindowLayer as String] as? NSNumber)?.intValue == 0 {
                 if let pid = (w[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value, apps[pid] != nil, seen.insert(pid).inserted { pids.append(pid) }
             }
-            axCache = Self.fetchAXWindows(pids)
+            axCache = SessionLog.timed("list: asking \(pids.count) apps for their windows") { Self.fetchAXWindows(pids) }
         }
         var found: [(entry: WindowEntry, rank: Int)] = []
         for (rank, w) in all.enumerated() {

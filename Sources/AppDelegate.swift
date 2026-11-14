@@ -77,7 +77,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         devicePoll = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             guard let self = self, !self.recognizer.isActive else { return }
-            if mt.attachedDeviceCount() != mt.deviceCount { mt.restart() }
+            SessionLog.timed("checking for trackpads") { if mt.attachedDeviceCount() != mt.deviceCount { mt.restart() } }
             // Accessibility may have been granted since launch.
             if Prefs.keyboardTrigger && !self.keyboard.isRunning { self.keyboard.apply() }
         }
