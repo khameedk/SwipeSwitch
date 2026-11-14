@@ -92,6 +92,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.switcher.warmUp() }
 
         if ProcessInfo.processInfo.environment["SWIPESWITCH_KEYDEMO"] != nil { runKeyboardDemo() }
+        // Development aid: SWIPESWITCH_BTT_TEST=scan lists BTT's swipe gestures (read-only);
+        // SWIPESWITCH_BTT_TEST=<gesture uuid> adds the condition to that one gesture, then removes it again. Then quits.
+        if let test = ProcessInfo.processInfo.environment["SWIPESWITCH_BTT_TEST"] { runBTTTest(test) }
 
         if let demo = ProcessInfo.processInfo.environment["SWIPESWITCH_DEMO"] {
             demoCancels = demo != "commit" && demo != "quick"
@@ -254,6 +257,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         NSApp.activate()
         settingsWindow?.makeKeyAndOrderFront(nil)
+    }
+
+    private func runBTTTest(_ test: String) {
+        DispatchQueue.global().async {
+            func show(_ gs: [BTTGestureSetup.Gesture]) {
+                for g in gs { print(g.hasOurCondition ? "  [x]" : "  [ ]", g.app, "-", g.name, "|", g.conditions?.predicateFormat ?? "-", "|", g.uuid) }
+            }
+            do {
+                let all = try BTTGestureSetup.scan(fingers: Prefs.fingerCount)
+                if test == "scan" {
+                    show(all)
+                    print("\(all.count) gestures, \(all.filter(\.hasOurCondition).count) with the condition")
+                } else if let g = all.first(where: { $0.uuid == test }) {
+                    print("before:"); show([g])
+                    try BTTGestureSetup.add(to: [g])
+                    let added = try BTTGestureSetup.scan(fingers: Prefs.fingerCount).filter { $0.uuid == test }
+                    print("after add:"); show(added)
+                    try BTTGestureSetup.remove(from: added)
+                    print("after remove:"); show(try BTTGestureSetup.scan(fingers: Prefs.fingerCount).filter { $0.uuid == test })
+                } else {
+                    print("no swipe gesture with that uuid")
+                }
+            } catch {
+                print("FAILED:", error)
+            }
+            fflush(stdout); exit(0)
+        }
     }
 
     // MARK: Demo (SWIPESWITCH_DEMO=1 to preview without touching the trackpad)

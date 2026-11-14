@@ -29,8 +29,9 @@ release, or pull and rebuild (`./build.sh --install`), to get fixes.
 
 SwipeSwitch asks for **Accessibility** access (required) and, optionally,
 **Screen Recording** access. If you turn on the BetterTouchTool option, it also asks to control
-**BetterTouchTool** (Automation), which it uses only to set one BTT variable while the switcher is open. See [Permissions and privacy](README.md#permissions-and-privacy)
-in the README for exactly what each one is used for. It has no network code and
+**BetterTouchTool** (Automation), which it uses only to set one BTT variable while the switcher is open
+and, when you click Add or Remove in its Settings, to add or remove one condition on BTT's swipe gestures.
+See [Permissions and privacy](README.md#permissions-and-privacy) in the README for exactly what each one is used for. It has no network code and
 never stores or sends anything about your apps, windows or screen. While a swipe-opened switcher is on
 screen it watches for Esc (to cancel) and nothing else. If you turn on the optional ⌘Tab keyboard trigger,
 it also receives key presses so it can catch ⌘Tab; it acts only on ⌘Tab and the keys that move its

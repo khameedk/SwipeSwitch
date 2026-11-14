@@ -155,36 +155,43 @@ BTT may also run any **three-finger swipe** gestures you have set up (for exampl
 could also trigger a BTT "3 Finger Swipe Left" shortcut in the app you're in). SwipeSwitch can't block
 another app's trackpad input, but it can tell BTT when the switcher is open so BTT skips those gestures.
 
-**1. In SwipeSwitch:** Settings › BetterTouchTool › turn on **Tell BetterTouchTool while the switcher
-is open**. SwipeSwitch then sets the BTT variable `swipeswitch_active` to `1` while the switcher is open
-and `0` when it closes, using BTT's [AppleScript command](https://docs.folivora.ai/docs/scripting/applescript/)
-`set_string_variable`. macOS asks once whether to let SwipeSwitch control BetterTouchTool: click **OK**.
-(If you don't, SwipeSwitch falls back to BTT's [`btt://` links](https://docs.folivora.ai/docs/scripting/url-scheme/).
-Those work too, but macOS delivers a link a moment late, which can make the window you switch to flicker.
-To change your answer later: System Settings › Privacy & Security › Automation › SwipeSwitch.)
+**1. In BTT, allow scripting (once):** Settings › Scripting BTT › turn on **Allow external
+BetterTouchTool Scripting**. We recommend also setting a **shared secret** there (otherwise any app or web
+page can send BTT commands); enter the same secret in SwipeSwitch › Settings › BetterTouchTool. BTT may ask
+once whether to allow these commands.
 
-**2. In BTT, allow scripting:** Settings › Scripting BTT › turn on **Allow external BetterTouchTool
-Scripting**. We recommend also setting a **shared secret** there (otherwise any app or web page can send
-BTT commands); enter the same secret in SwipeSwitch › Settings › BetterTouchTool. BTT may ask once
-whether to allow these commands.
+**2. In SwipeSwitch:** Settings › BetterTouchTool › turn on **Tell BetterTouchTool while the switcher
+is open**, with BTT running.
 
-**3. In BTT, add a condition to each three-finger swipe gesture.** This covers every
-**3 Finger Swipe Left, Right, Up or Down** you have, both under **For All Apps** and in each app's own
-settings (for example, an app-specific "3 Finger Swipe Left"). For each one:
+- macOS asks once whether to let SwipeSwitch control BetterTouchTool: click **OK**.
+- SwipeSwitch then looks at your BTT gestures and offers to add the condition `swipeswitch_active` **is
+  not** `1` to every **3 Finger Swipe Left, Right, Up and Down** that doesn't have it yet, under **For All
+  Apps** and in each app's own settings. It lists them first; click **Add**.
 
-1. In BTT's configuration window, select **For All Apps** or the app in the left list.
-2. Click the gesture.
-3. In the gesture's settings on the right, open **Advanced Conditions…**.
-4. Add one condition: variable `swipeswitch_active`, **is not**, value `1`. Save.
-
-BTT's **Search All Triggers** button (below the app list) can help you find them all. This uses BTT's
+From then on SwipeSwitch sets the BTT variable `swipeswitch_active` to `1` while the switcher is open and
+`0` when it closes, using BTT's [AppleScript command](https://docs.folivora.ai/docs/scripting/applescript/)
+`set_string_variable`. This uses BTT's
 [Advanced Trigger Conditions](https://docs.folivora.ai/docs/actions/conditions/): BTT still notices the
 swipe, but skips its action while the switcher is open. Outside the switcher, the gesture works exactly as
 before.
 
-**4. Check it.** With an app in front that has one of these gestures, swipe right with three fingers to
+**3. Check it.** With an app in front that has one of these gestures, swipe right with three fingers to
 open the switcher, swipe back left, then lift your fingers: the BTT action should **not** run. A plain
 three-finger swipe left, without the switcher, should still run it.
+
+The same Settings section shows how many of your BTT swipe gestures have the condition:
+
+- **Add condition to …** covers gestures you've added in BTT since (click **Check** to look again).
+- **Remove condition…** takes it out again. It removes only this condition; any others a gesture has stay.
+- When adding, SwipeSwitch keeps a gesture's other conditions, reads each gesture back from BTT to check
+  the change took, and stops if anything looks different from what it expects (say, after a BTT update).
+  Then add the condition by hand (see [Appendix: adding the BTT condition by hand](#appendix-adding-the-btt-condition-by-hand)).
+
+If you didn't click **OK**, SwipeSwitch can't add the conditions (add them by hand, see the
+[appendix](#appendix-adding-the-btt-condition-by-hand)) and falls back to BTT's
+[`btt://` links](https://docs.folivora.ai/docs/scripting/url-scheme/) for the variable. Those work too, but
+macOS delivers a link a moment late, which can make the window you switch to flicker. To change your answer
+later: System Settings › Privacy & Security › Automation › SwipeSwitch.
 
 Notes:
 
@@ -204,7 +211,7 @@ internet, and it collects, stores and sends nothing about you, your apps or your
 | Permission | Required? | What it's used for |
 | --- | --- | --- |
 | **Accessibility** | Yes | Watching for ⌘Tab (only if you turn on the keyboard option), bringing the app or window you pick to the front (including on other desktops), reading window titles and whether a window is minimized, and noticing which window you last focused so the list is in the right order. |
-| **Automation › BetterTouchTool** | Optional | Only if you turn on the BetterTouchTool option: setting BTT's `swipeswitch_active` variable while the switcher is open. It sends that one command and nothing else. |
+| **Automation › BetterTouchTool** | Optional | Only if you turn on the BetterTouchTool option: setting BTT's `swipeswitch_active` variable while the switcher is open, and, when you click Add or Remove in Settings, adding or removing that one condition on your BTT swipe gestures. Nothing else. |
 | **Screen Recording** | Optional | Only to read the *titles* of windows on other desktops before you've visited them. SwipeSwitch never captures, records or saves screen images. |
 
 What else it touches:
@@ -223,7 +230,9 @@ What else it touches:
 - **Settings** are stored in macOS's normal preferences for the app (`io.github.khameedk.swipeswitch`).
 - **Window titles and focus order** are kept in memory while the app runs and are never written to disk.
 - **BetterTouchTool** (only if you turn that option on): SwipeSwitch tells BTT on your Mac whether the
-  switcher is open (by AppleScript command, or by `btt://` link if you didn't allow that). Nothing else is sent, and nothing leaves your Mac.
+  switcher is open (by AppleScript command, or by `btt://` link if you didn't allow that), and adds or
+  removes the condition on BTT's swipe gestures when you click Add or Remove. Nothing else is sent, and
+  nothing leaves your Mac.
 - **Diagnostic log** (off by default, Settings › Diagnostics): records each switch (when it opened, how the
   swipe ended, which app it switched to and whether it landed) in macOS's log on your Mac. App names only:
   no keystrokes or window titles.
@@ -327,6 +336,22 @@ swift docs/make_media.swift docs/images
 
 Each image's file name includes a fingerprint of its contents, and the script updates the links above, so
 a changed image gets a new address and GitHub shows it right away instead of a cached copy.
+
+## Appendix: adding the BTT condition by hand
+
+Only needed if SwipeSwitch can't add the condition for you (for example, you didn't allow it to control
+BetterTouchTool, or a BTT update changed how conditions are stored).
+
+First open the switcher once (swipe right and lift): BTT only lists a variable after it has been set, so
+this makes `swipeswitch_active` show up in its condition editor. Then, for each **3 Finger Swipe Left,
+Right, Up or Down**, under **For All Apps** and in each app's own settings:
+
+1. In BTT's configuration window, select **For All Apps** or the app in the left list.
+2. Click the gesture.
+3. In the gesture's settings on the right, open **Advanced Conditions…**.
+4. Add one condition: variable `swipeswitch_active`, **is not**, value `1`. Save.
+
+BTT's **Search All Triggers** button (below the app list) can help you find them all.
 
 ## License
 

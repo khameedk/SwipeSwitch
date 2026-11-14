@@ -15,7 +15,16 @@ enum BetterTouchTool {
     /// Events go out one at a time, in order, off the main thread (a send can wait on the permission prompt).
     private static let queue = DispatchQueue(label: "io.github.khameedk.swipeswitch.btt")
 
-    private static var isRunning: Bool {
+    /// Whether SwipeSwitch may control BTT. `ask`: show macOS's prompt if it hasn't been answered (blocks until it is,
+    /// so call off the main thread).
+    static func hasPermission(ask: Bool) -> Bool { permission(ask: ask) == noErr }
+
+    /// BTT's own "Allow external BetterTouchTool Scripting" setting, if it can be read.
+    static var externalScriptingAllowed: Bool? {
+        CFPreferencesCopyAppValue("BTTAllowExternalScripting" as CFString, bundleID as CFString) as? Bool
+    }
+
+    static var isRunning: Bool {
         !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty
     }
 
@@ -33,13 +42,6 @@ enum BetterTouchTool {
             if permission(ask: true) == noErr, sendEvent(value: value, secret: secret) { return }
             DispatchQueue.main.async { openLink(value: value, secret: secret) }
         }
-    }
-
-    /// Asks for the "control BetterTouchTool" permission now (if macOS hasn't asked yet), so the prompt doesn't first
-    /// appear in the middle of a swipe. Called when the setting is turned on, and at launch while it's on.
-    static func requestPermissionIfNeeded() {
-        guard Prefs.bttIntegration, isRunning else { return }
-        queue.async { _ = permission(ask: true) }
     }
 
     /// noErr when allowed; errAEEventNotPermitted when the user said no.
@@ -69,6 +71,21 @@ enum BetterTouchTool {
             SessionLog.problem("BTT: Apple Event failed (\(error.localizedDescription)), using the btt:// link")
             return false
         }
+    }
+
+    /// Sends one BTT scripting command and waits for its text reply. `params` maps four-letter parameter codes from
+    /// BTT's scripting dictionary to values. Call off the main thread. Throws if the event can't be delivered.
+    static func command(_ eventID: String, direct: String? = nil, params: [String: String] = [:]) throws -> String {
+        let event = NSAppleEventDescriptor.appleEvent(
+            withEventClass: fourCC("Bttt"), eventID: fourCC(eventID),
+            targetDescriptor: NSAppleEventDescriptor(bundleIdentifier: bundleID),
+            returnID: AEReturnID(kAutoGenerateReturnID), transactionID: AETransactionID(kAnyTransactionID))
+        if let direct { event.setParam(NSAppleEventDescriptor(string: direct), forKeyword: keyDirectObject) }
+        for (code, value) in params { event.setParam(NSAppleEventDescriptor(string: value), forKeyword: fourCC(code)) }
+        let secret = Prefs.bttSharedSecret
+        if !secret.isEmpty { event.setParam(NSAppleEventDescriptor(string: secret), forKeyword: fourCC("btSs")) }
+        let reply = try event.sendEvent(options: [.waitForReply], timeout: 10)
+        return reply.paramDescriptor(forKeyword: keyDirectObject)?.stringValue ?? ""
     }
 
     private static func openLink(value: String, secret: String) {

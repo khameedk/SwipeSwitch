@@ -36,6 +36,7 @@ struct SettingsView: View {
     @AppStorage(Prefs.Key.hapticStrength) private var hapticStrength: HapticStrength = .medium
 
     @ObservedObject var status: SettingsStatus
+    @StateObject private var bttSetup = BTTSetupModel()
 
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -176,13 +177,18 @@ struct SettingsView: View {
 
             Section("BetterTouchTool") {
                 Toggle("Tell BetterTouchTool while the switcher is open", isOn: $bttIntegration)
-                    .onChange(of: bttIntegration) { on in if on { BetterTouchTool.requestPermissionIfNeeded() } }
+                    .onChange(of: bttIntegration) { on in if on { bttSetup.check(ask: true) } }
                 if bttIntegration {
                     LabeledContent("Shared secret") {
                         SecureField("Optional", text: $bttSharedSecret).frame(width: 200)
                     }
+                    if BetterTouchTool.externalScriptingAllowed == false {
+                        note("In BetterTouchTool, turn on Settings › Scripting BTT › “Allow external BetterTouchTool Scripting”.", color: .red)
+                    }
+                    BTTSetupRows(model: bttSetup, fingers: fingers)
+                        .onAppear { bttSetup.check(ask: false) }
                 }
-                note("Sets the BTT variable “\(BetterTouchTool.variable)” to 1 while the switcher is open and 0 when it closes. In BTT, turn on “Allow external BetterTouchTool Scripting”, then give each three-finger swipe gesture the Advanced Condition “\(BetterTouchTool.variable) is not 1” so BTT skips it while you're switching. Only sent while BTT is running. macOS asks once to let SwipeSwitch control BetterTouchTool; allowing it keeps the switched-to window from flickering. See the README for details.")
+                note("Sets the BTT variable “\(BetterTouchTool.variable)” to 1 while the switcher is open and 0 when it closes. BTT skips any gesture that has the condition “\(BetterTouchTool.variable) is not 1”; SwipeSwitch can add that condition to your BTT swipe gestures for you. macOS asks once to let SwipeSwitch control BetterTouchTool. Only used while BTT is running. See the README for details.")
             }
 
             Section("Status") {
@@ -229,7 +235,10 @@ struct SettingsView: View {
         .frame(width: 520, height: 720)
         .onAppear(perform: refresh)
         .onReceive(timer) { _ in if settingsWindowVisible { refresh() } }
-        .onChange(of: fingers) { _ in refresh() }
+        .onChange(of: fingers) { _ in
+            refresh()
+            if bttIntegration { bttSetup.check(ask: false) }
+        }
     }
 
     private var altTabRunning: Bool {
