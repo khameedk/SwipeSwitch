@@ -79,11 +79,11 @@ final class SwipeGestureRecognizer {
                 lowCountSince = nil
                 stepIfNeeded(tx: tx, ty: ty)
             } else if f.count == 0 {
-                finish(); return
+                finish("fingers lifted"); return
             } else if f.count < n {
                 // Fingers rarely lift at exactly the same instant; give a short grace period.
                 if let since = lowCountSince {
-                    if now - since > 0.08 { finish(); return }
+                    if now - since > 0.08 { finish("fingers lifted (one at a time)"); return }
                 } else {
                     lowCountSince = now
                 }
@@ -119,7 +119,8 @@ final class SwipeGestureRecognizer {
     /// Feed frames from code (used by the demo mode).
     func simulate(_ f: TouchFrame) { handle(f) }
 
-    private func finish() {
+    private func finish(_ reason: String) {
+        SessionLog.note("swipe ended: \(reason)")
         reset()
         onEnd?()
     }
@@ -137,7 +138,7 @@ final class SwipeGestureRecognizer {
         watchdog = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
             guard let self = self else { return }
             if CACurrentMediaTime() - self.lastFrameTime > 0.2 {
-                if self.phase == .active { self.finish() } else { self.reset() }
+                if self.phase == .active { self.finish("touch frames stopped (watchdog)") } else { self.reset() }
             }
         }
     }

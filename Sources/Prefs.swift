@@ -24,7 +24,8 @@ enum Prefs {
         static let bttIntegration = "bttIntegration"
         static let bttSharedSecret = "bttSharedSecret"
         static let keyboardTrigger = "keyboardTrigger"
-        static let disabledSystemCommandTab = "disabledSystemCommandTab"   // old setting: fraction of trackpad width
+        static let disabledSystemCommandTab = "disabledSystemCommandTab"
+        static let diagnosticLogging = "diagnosticLogging"   // old setting: fraction of trackpad width
         static let haptics = "haptics"
         static let scope = "scope"
         static let maxApps = "maxApps"
@@ -51,6 +52,7 @@ enum Prefs {
         Key.bttIntegration: false,
         Key.bttSharedSecret: "",
         Key.keyboardTrigger: false,
+        Key.diagnosticLogging: false,
         Key.haptics: true,
         Key.scope: Scope.all.rawValue,
         Key.maxApps: 24,

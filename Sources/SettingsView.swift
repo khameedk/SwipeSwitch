@@ -19,6 +19,7 @@ struct SettingsView: View {
     @AppStorage(Prefs.Key.bttIntegration) private var bttIntegration = false
     @AppStorage(Prefs.Key.bttSharedSecret) private var bttSharedSecret = ""
     @AppStorage(Prefs.Key.keyboardTrigger) private var keyboardTrigger = false
+    @AppStorage(Prefs.Key.diagnosticLogging) private var diagnosticLogging = false
     @AppStorage(Prefs.Key.haptics) private var haptics = true
     @AppStorage(Prefs.Key.scope) private var scope: Scope = .all
     @AppStorage(Prefs.Key.maxApps) private var maxApps = 24
@@ -175,12 +176,13 @@ struct SettingsView: View {
 
             Section("BetterTouchTool") {
                 Toggle("Tell BetterTouchTool while the switcher is open", isOn: $bttIntegration)
+                    .onChange(of: bttIntegration) { on in if on { BetterTouchTool.requestPermissionIfNeeded() } }
                 if bttIntegration {
                     LabeledContent("Shared secret") {
                         SecureField("Optional", text: $bttSharedSecret).frame(width: 200)
                     }
                 }
-                note("Sets the BTT variable “\(BetterTouchTool.variable)” to 1 while the switcher is open and 0 when it closes. In BTT, turn on “Allow external BetterTouchTool Scripting”, then give each three-finger swipe gesture the Advanced Condition “\(BetterTouchTool.variable) is not 1” so BTT skips it while you're switching. Only sent while BTT is running. See the README for details.")
+                note("Sets the BTT variable “\(BetterTouchTool.variable)” to 1 while the switcher is open and 0 when it closes. In BTT, turn on “Allow external BetterTouchTool Scripting”, then give each three-finger swipe gesture the Advanced Condition “\(BetterTouchTool.variable) is not 1” so BTT skips it while you're switching. Only sent while BTT is running. macOS asks once to let SwipeSwitch control BetterTouchTool; allowing it keeps the switched-to window from flickering. See the README for details.")
             }
 
             Section("Status") {
@@ -209,6 +211,11 @@ struct SettingsView: View {
                     }
                     note("Without it, windows on other desktops show their app name until you've visited them once. SwipeSwitch never records your screen.")
                 }
+            }
+
+            Section("Diagnostics") {
+                Toggle("Log switcher activity (for troubleshooting)", isOn: $diagnosticLogging)
+                note("Records each switch (when it opened, how the swipe ended, which app it switched to, and whether it landed) in macOS's log on this Mac. App names only: no keystrokes or window titles. Leave it off unless you're tracking down a problem.")
             }
 
             Section {

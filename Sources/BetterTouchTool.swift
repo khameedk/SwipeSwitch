@@ -1,19 +1,79 @@
 import AppKit
+import CoreServices
 
 /// Optional: lets BetterTouchTool know while the switcher is open, so BTT gestures can pause.
-/// Sets the BTT variable `swipeswitch_active` to 1 on open and 0 on close, via BTT's btt:// links.
-/// Does nothing unless the user turns it on and BTT is already running (a btt:// link would launch it).
+/// Sets the BTT variable `swipeswitch_active` to 1 on open and 0 on close.
+/// Does nothing unless the user turns it on and BTT is already running (we never launch BTT).
+///
+/// The variable is set with BTT's AppleScript command, sent as an Apple Event straight to BTT. That needs a one-time
+/// macOS "control BetterTouchTool" permission. Without it we fall back to BTT's btt:// link, which works but goes
+/// through Launch Services; a link opened just as an app is being switched to can make macOS hand the front back to
+/// the previous app for a moment, so the switched-to window flickers.
 enum BetterTouchTool {
     static let variable = "swipeswitch_active"
     private static let bundleID = "com.hegenberg.BetterTouchTool"
+    /// Events go out one at a time, in order, off the main thread (a send can wait on the permission prompt).
+    private static let queue = DispatchQueue(label: "io.github.khameedk.swipeswitch.btt")
 
-    static func setActive(_ active: Bool) {
-        guard Prefs.bttIntegration,
-              !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty else { return }
-        var parts = URLComponents(string: "btt://set_string_variable/")!
-        parts.queryItems = [URLQueryItem(name: "variable_name", value: variable),
-                            URLQueryItem(name: "to", value: active ? "1" : "0")]
+    private static var isRunning: Bool {
+        !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty
+    }
+
+    /// `wait`: send before returning (used when quitting, so the reset isn't lost).
+    static func setActive(_ active: Bool, wait: Bool = false) {
+        guard Prefs.bttIntegration, isRunning else { return }
+        let value = active ? "1" : "0"
         let secret = Prefs.bttSharedSecret
+        if wait {
+            let sent = queue.sync { permission(ask: false) == noErr && sendEvent(value: value, secret: secret) }
+            if !sent { openLink(value: value, secret: secret) }
+            return
+        }
+        queue.async {
+            if permission(ask: true) == noErr, sendEvent(value: value, secret: secret) { return }
+            DispatchQueue.main.async { openLink(value: value, secret: secret) }
+        }
+    }
+
+    /// Asks for the "control BetterTouchTool" permission now (if macOS hasn't asked yet), so the prompt doesn't first
+    /// appear in the middle of a swipe. Called when the setting is turned on, and at launch while it's on.
+    static func requestPermissionIfNeeded() {
+        guard Prefs.bttIntegration, isRunning else { return }
+        queue.async { _ = permission(ask: true) }
+    }
+
+    /// noErr when allowed; errAEEventNotPermitted when the user said no.
+    private static func permission(ask: Bool) -> OSStatus {
+        let target = NSAppleEventDescriptor(bundleIdentifier: bundleID)
+        guard let desc = target.aeDesc else { return OSStatus(errAEEventNotPermitted) }
+        return AEDeterminePermissionToAutomateTarget(desc, typeWildCard, typeWildCard, ask)
+    }
+
+    private static func fourCC(_ s: String) -> FourCharCode {
+        s.utf8.reduce(0) { $0 << 8 | FourCharCode($1) }
+    }
+
+    /// BTT's `set_string_variable "name" to "value" [shared_secret "…"]`, without waiting for a reply.
+    private static func sendEvent(value: String, secret: String) -> Bool {
+        let event = NSAppleEventDescriptor.appleEvent(
+            withEventClass: fourCC("Bttt"), eventID: fourCC("SetV"),
+            targetDescriptor: NSAppleEventDescriptor(bundleIdentifier: bundleID),
+            returnID: AEReturnID(kAutoGenerateReturnID), transactionID: AETransactionID(kAnyTransactionID))
+        event.setParam(NSAppleEventDescriptor(string: variable), forKeyword: keyDirectObject)
+        event.setParam(NSAppleEventDescriptor(string: value), forKeyword: fourCC("bTpV"))
+        if !secret.isEmpty { event.setParam(NSAppleEventDescriptor(string: secret), forKeyword: fourCC("btSs")) }
+        do {
+            _ = try event.sendEvent(options: [.noReply], timeout: 1)
+            return true
+        } catch {
+            SessionLog.problem("BTT: Apple Event failed (\(error.localizedDescription)), using the btt:// link")
+            return false
+        }
+    }
+
+    private static func openLink(value: String, secret: String) {
+        var parts = URLComponents(string: "btt://set_string_variable/")!
+        parts.queryItems = [URLQueryItem(name: "variable_name", value: variable), URLQueryItem(name: "to", value: value)]
         if !secret.isEmpty { parts.queryItems?.append(URLQueryItem(name: "shared_secret", value: secret)) }
         guard let url = parts.url else { return }
         let cfg = NSWorkspace.OpenConfiguration()

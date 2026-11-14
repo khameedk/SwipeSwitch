@@ -157,12 +157,16 @@ another app's trackpad input, but it can tell BTT when the switcher is open so B
 
 **1. In SwipeSwitch:** Settings › BetterTouchTool › turn on **Tell BetterTouchTool while the switcher
 is open**. SwipeSwitch then sets the BTT variable `swipeswitch_active` to `1` while the switcher is open
-and `0` when it closes, using BTT's [`btt://` links](https://docs.folivora.ai/docs/scripting/url-scheme/).
+and `0` when it closes, using BTT's [AppleScript command](https://docs.folivora.ai/docs/scripting/applescript/)
+`set_string_variable`. macOS asks once whether to let SwipeSwitch control BetterTouchTool: click **OK**.
+(If you don't, SwipeSwitch falls back to BTT's [`btt://` links](https://docs.folivora.ai/docs/scripting/url-scheme/).
+Those work too, but macOS delivers a link a moment late, which can make the window you switch to flicker.
+To change your answer later: System Settings › Privacy & Security › Automation › SwipeSwitch.)
 
-**2. In BTT, allow the links:** Settings › Scripting BTT › turn on **Allow external BetterTouchTool
+**2. In BTT, allow scripting:** Settings › Scripting BTT › turn on **Allow external BetterTouchTool
 Scripting**. We recommend also setting a **shared secret** there (otherwise any app or web page can send
 BTT commands); enter the same secret in SwipeSwitch › Settings › BetterTouchTool. BTT may ask once
-whether to allow the links.
+whether to allow these commands.
 
 **3. In BTT, add a condition to each three-finger swipe gesture.** This covers every
 **3 Finger Swipe Left, Right, Up or Down** you have, both under **For All Apps** and in each app's own
@@ -184,8 +188,8 @@ three-finger swipe left, without the switcher, should still run it.
 
 Notes:
 
-- SwipeSwitch only sends these links while BTT is already running (a `btt://` link would otherwise launch
-  it), and it resets the variable to `0` when it starts and quits.
+- SwipeSwitch only sends these commands while BTT is already running (it never launches BTT), and it
+  resets the variable to `0` when it starts and quits.
 - A gesture that BTT recognizes in the first few millimetres of a swipe, before the switcher opens, can
   still run. Gestures you make *inside* the switcher (swiping back, changing rows) are covered.
 - What didn't work, in case you're tempted: a Conditional Activation Group with **Disable BetterTouchTool
@@ -200,6 +204,7 @@ internet, and it collects, stores and sends nothing about you, your apps or your
 | Permission | Required? | What it's used for |
 | --- | --- | --- |
 | **Accessibility** | Yes | Watching for ⌘Tab (only if you turn on the keyboard option), bringing the app or window you pick to the front (including on other desktops), reading window titles and whether a window is minimized, and noticing which window you last focused so the list is in the right order. |
+| **Automation › BetterTouchTool** | Optional | Only if you turn on the BetterTouchTool option: setting BTT's `swipeswitch_active` variable while the switcher is open. It sends that one command and nothing else. |
 | **Screen Recording** | Optional | Only to read the *titles* of windows on other desktops before you've visited them. SwipeSwitch never captures, records or saves screen images. |
 
 What else it touches:
@@ -217,8 +222,11 @@ What else it touches:
     keyboard at all.
 - **Settings** are stored in macOS's normal preferences for the app (`io.github.khameedk.swipeswitch`).
 - **Window titles and focus order** are kept in memory while the app runs and are never written to disk.
-- **BetterTouchTool links** (only if you turn that option on): SwipeSwitch sends local `btt://` links to
-  BTT on your Mac saying whether the switcher is open. Nothing else is sent, and nothing leaves your Mac.
+- **BetterTouchTool** (only if you turn that option on): SwipeSwitch tells BTT on your Mac whether the
+  switcher is open (by AppleScript command, or by `btt://` link if you didn't allow that). Nothing else is sent, and nothing leaves your Mac.
+- **Diagnostic log** (off by default, Settings › Diagnostics): records each switch (when it opened, how the
+  swipe ended, which app it switched to and whether it landed) in macOS's log on your Mac. App names only:
+  no keystrokes or window titles.
 
 You can check all of this in the source: everything lives in [`Sources/`](Sources) (about 1,700 lines of Swift).
 
@@ -263,6 +271,12 @@ update could still change them, so if something stops working after an update, p
   Settings › Gesture.
 - **The switcher opens but doesn't switch apps.** Grant Accessibility access (Settings › Status shows
   whether it's granted). If it's already on, remove SwipeSwitch from the Accessibility list and add it again.
+- **A swipe opens the switcher but sometimes doesn't switch.** Turn on Settings › Diagnostics › **Log
+  switcher activity**, reproduce it, then read the log in Terminal:
+  ```bash
+  /usr/bin/log show --last 10m --predicate 'subsystem == "io.github.khameedk.swipeswitch"'
+  ```
+  Each switch ends with `CONFIRMED` or `FAILED`. Turn logging off again when you're done.
 - **It stopped responding after waking from sleep.** SwipeSwitch reconnects to the trackpad after
   waking on its own; if it still doesn't respond, quit it from the menu bar icon and open it again.
 - **The menu bar icon is missing** on a Mac with a notch. macOS hides icons behind the notch when the

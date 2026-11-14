@@ -296,6 +296,7 @@ final class SwitcherController {
         let gen = generation
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { if gen == self.generation { self.panel.invalidateShadow() } }
         isShowing = true
+        SessionLog.note("opened via \(haptics ? "swipe" : "keys") mode=\(Prefs.mode.rawValue) items=\(items.count) current=\(currentIndex ?? -1) selected=\(self.model.selected)")
         BetterTouchTool.setActive(true)
         haptic()
         return true
@@ -312,6 +313,7 @@ final class SwitcherController {
             i = min(max(i, 0), n - 1)
         }
         guard i != model.selected else { return }
+        SessionLog.note("step (\(dx),\(dy)) -> selected=\(i)")
         withAnimation(.spring(response: 0.26, dampingFraction: 0.82)) { model.selected = i }
         haptic()
     }
@@ -320,27 +322,66 @@ final class SwitcherController {
         guard isShowing else { return }
         let index = model.selected
         let target = model.items.indices.contains(index) ? model.items[index].target : nil
-        hide()
-        guard let target, index != model.currentIndex else { return }   // already in front
+        let switching = target != nil && index != model.currentIndex
+        hide(switching: switching)
+        guard let target, switching else {
+            SessionLog.note("commit: selected=\(index) is already in front, nothing to switch")
+            return
+        }
+        let targetApp: NSRunningApplication
+        var targetWindow: CGWindowID?
         switch target {
         case .app(let app):
+            targetApp = app
             Activator.activate(app)
         case .window(let w):
+            targetApp = w.app
+            targetWindow = w.id
             windows.noteActivated(w.id)
             Activator.activate(window: w)
+        }
+        let name = targetApp.localizedName ?? "?"
+        SessionLog.note("commit: switching to \(name) (selected=\(index))")
+        // With diagnostics on, check that the switch actually landed (after the safety net has had its chance).
+        guard SessionLog.enabled else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+            let front = NSWorkspace.shared.frontmostApplication
+            let appOK = front?.processIdentifier == targetApp.processIdentifier
+            var windowNote = ""
+            if let wid = targetWindow, appOK {
+                var focused: CFTypeRef?
+                AXUIElementCopyAttributeValue(AXUIElementCreateApplication(targetApp.processIdentifier), kAXFocusedWindowAttribute as CFString, &focused)
+                let fid = focused.flatMap { PrivateAPI.windowID(of: $0 as! AXUIElement) }
+                windowNote = fid == wid ? ", right window focused" : ", but a different window is focused"
+            }
+            if appOK {
+                SessionLog.note("result: switch to \(name) CONFIRMED\(windowNote)")
+            } else {
+                SessionLog.problem("result: switch to \(name) FAILED, front is \(front?.localizedName ?? "?")")
+            }
         }
     }
 
     func cancel() {
+        if isShowing { SessionLog.note("cancelled") }
         guard isShowing else { return }
         hide()
     }
 
-    private func hide() {
+    /// `switching`: an app is being brought to the front. Opening BTT's link at that same moment can make macOS hand the
+    /// front back to the previous app for a moment (the window visibly flickers), so the link waits until the switch
+    /// has settled. BTT gestures stay paused that half second longer, which does no harm.
+    private func hide(switching: Bool = false) {
         isShowing = false
-        BetterTouchTool.setActive(false)
         generation += 1
         let gen = generation
+        if switching {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                if gen == self.generation { BetterTouchTool.setActive(false) }   // unless the switcher reopened
+            }
+        } else {
+            BetterTouchTool.setActive(false)
+        }
         withAnimation(.easeOut(duration: 0.12)) { model.appeared = false }
         NSAnimationContext.runAnimationGroup({ ctx in
             ctx.duration = 0.12

@@ -13,5 +13,6 @@
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>LSUIElement</key><true/>
     <key>NSHighResolutionCapable</key><true/>
+    <key>NSAppleEventsUsageDescription</key><string>SwipeSwitch tells BetterTouchTool while the switcher is open (only if you turn this on in Settings), so BetterTouchTool can pause its own gestures.</string>
 </dict>
 </plist>

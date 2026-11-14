@@ -14,7 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var demoCancels = false
 
     func applicationWillTerminate(_ notification: Notification) {
-        BetterTouchTool.setActive(false)
+        BetterTouchTool.setActive(false, wait: true)
         keyboard.stop()   // gives ⌘Tab back to macOS if we took it
     }
 
@@ -94,8 +94,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if ProcessInfo.processInfo.environment["SWIPESWITCH_KEYDEMO"] != nil { runKeyboardDemo() }
 
         if let demo = ProcessInfo.processInfo.environment["SWIPESWITCH_DEMO"] {
-            demoCancels = demo != "commit"
-            runDemo()
+            demoCancels = demo != "commit" && demo != "quick"
+            if demo == "quick" { runQuickSwipeDemo() } else { runDemo() }
         }
     }
 
@@ -257,6 +257,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     // MARK: Demo (SWIPESWITCH_DEMO=1 to preview without touching the trackpad)
+
+    /// Demo (SWIPESWITCH_DEMO=quick): repeated quick swipe-and-release with real switching, for testing switch
+    /// reliability together with the diagnostic log.
+    private func runQuickSwipeDemo() {
+        let dev: UInt = 0xDE31
+        let n = Prefs.fingerCount
+        let size = MultitouchMonitor.fallbackSize
+        let repeats = Int(ProcessInfo.processInfo.environment["SWIPESWITCH_DEMO_REPEAT"] ?? "") ?? 10
+        let travel = (Prefs.activationMillimetres + 1) / size.width   // just past the opening distance
+        var frames: [TouchFrame] = []
+        for _ in 0..<repeats {
+            var x = 0.3
+            for _ in 0..<3 { frames.append(TouchFrame(device: dev, count: n, x: x, y: 0.5)) }        // fingers land
+            for _ in 0..<5 { x += travel / 5; frames.append(TouchFrame(device: dev, count: n, x: x, y: 0.5)) }   // ~50 ms flick
+            frames.append(TouchFrame(device: dev, count: 0, x: 0, y: 0))                                  // lift
+            for _ in 0..<150 { frames.append(TouchFrame(device: dev, count: 0, x: 0, y: 0)) }             // 1.5 s gap
+        }
+        var i = 0
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            Timer.scheduledTimer(withTimeInterval: 0.01, repeats: true) { [weak self] t in
+                guard let self = self, i < frames.count else { t.invalidate(); return }
+                self.recognizer.simulate(frames[i])
+                i += 1
+            }
+        }
+    }
 
     private func runDemo() {
         let dev: UInt = 0xDE30
