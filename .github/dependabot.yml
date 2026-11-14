@@ -5,3 +5,7 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # Wait two weeks after a version is published before proposing it, so a compromised or broken release is
+    # usually caught and pulled before it reaches these workflows (one of them holds the signing certificate).
+    cooldown:
+      default-days: 14

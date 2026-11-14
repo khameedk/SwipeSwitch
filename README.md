@@ -262,9 +262,10 @@ Every change to this repo is checked automatically on GitHub:
 | --- | --- |
 | **Build** | Builds the app from exactly the code in the repo (and the `--dev` variant, so the test hooks keep compiling), then runs [`scripts/check-no-network.sh`](scripts/check-no-network.sh), which fails if the source contains networking code or the built app imports networking functions. |
 | **CodeQL** | GitHub's code scanner looks for security problems in the Swift code (also weekly). |
+| **Semgrep** | A second scanner, mainly for the GitHub workflows (such as script injection), shell scripts and accidentally committed secrets (also weekly). |
 | **OpenSSF Scorecard** | Rates the repo's security practices; the score is the badge at the top. |
 | **Release** | Tagged versions are built on GitHub, signed with the project's own code-signing certificate (so macOS keeps your permissions across updates and refuses anything else claiming to be SwipeSwitch), checked for networking code, and published with a checksum and a signed build-provenance record. |
-| **Dependabot** | Keeps the GitHub Actions used above up to date. The app itself has no third-party dependencies. |
+| **Dependabot** | Keeps the GitHub Actions used above up to date, waiting two weeks after each new version so a compromised release is usually caught first. The app itself has no third-party dependencies. |
 
 You can run the network check yourself after building:
 

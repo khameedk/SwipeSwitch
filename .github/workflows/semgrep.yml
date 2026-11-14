@@ -1,0 +1,42 @@
+# Semgrep: a second static scanner next to CodeQL. Its free rules cover the GitHub Actions workflows (such as
+# script injection), shell scripts and committed secrets more than the Swift code itself, which CodeQL covers.
+# Results appear under Security › Code scanning.
+name: Semgrep
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "41 4 * * 1"   # weekly, Mondays
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write   # upload results to Code scanning
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Pinned image (semgrep/semgrep 1.181.0). --metrics=off: send Semgrep no usage data.
+      - name: Scan
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src \
+            semgrep/semgrep:1.181.0@sha256:81474464c1f07483ba0682a44787fd93c91397419762a04abe2bafaae396304b \
+            semgrep scan --metrics=off --disable-version-check \
+              --config p/default --config p/secrets --config p/github-actions \
+              --sarif --output semgrep.sarif
+
+      - name: Upload results
+        if: always()
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
