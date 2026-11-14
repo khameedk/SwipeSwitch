@@ -1,5 +1,29 @@
 import AppKit
 
+/// The app in front, counting a switch SwipeSwitch has just made that macOS hasn't finished yet. Without this, a
+/// quick second swipe would still see the old app in front and start on the app you'd just switched to.
+/// Main thread only.
+enum FrontApp {
+    private static var pending: (pid: pid_t, at: Double)?
+    /// A switch that hasn't landed by then is treated as failed.
+    private static let pendingMaxAge = 1.0
+
+    static func switching(to pid: pid_t) { pending = (pid, CACurrentMediaTime()) }
+    /// Any app activation (the switch landing, or the user picking another app) ends the wait.
+    static func activated() { pending = nil }
+
+    static var switchPending: Bool {
+        guard let p = pending else { return false }
+        if CACurrentMediaTime() - p.at < pendingMaxAge { return true }
+        pending = nil
+        return false
+    }
+    static var pid: pid_t? {
+        if switchPending, let p = pending { return p.pid }
+        return NSWorkspace.shared.frontmostApplication?.processIdentifier
+    }
+}
+
 /// Keeps apps in most-recently-used order and answers "which apps should the switcher show?".
 final class AppTracker {
     private var mru: [pid_t] = []
@@ -9,6 +33,7 @@ final class AppTracker {
         seed()
         let nc = NSWorkspace.shared.notificationCenter
         nc.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] n in
+            FrontApp.activated()
             guard let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
             self?.bump(app.processIdentifier)
         }
@@ -60,7 +85,7 @@ final class AppTracker {
         let byPID = owners
         for pid in owners.keys.sorted() where !mru.contains(pid) { mru.append(pid) }
 
-        let frontPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        let frontPID = FrontApp.pid
         if let f = frontPID, let i = mru.firstIndex(of: f), i != 0 { mru.remove(at: i); mru.insert(f, at: 0) }
 
         let ordered = mru.compactMap { byPID[$0] }

@@ -273,7 +273,10 @@ final class WindowTracker {
     func candidates() -> [WindowEntry] {
         let trusted = AXIsProcessTrusted()
         if trusted && CACurrentMediaTime() - lastFullScan > Self.retryInterval { SessionLog.timed("list: rescanning apps") { ensureObservers() } }
-        if let front = NSWorkspace.shared.frontmostApplication { SessionLog.timed("list: front window") { stampFocusedWindow(of: front.processIdentifier) } }
+        // (Not while a switch is landing: the old app would still answer, and its window would jump back to the top.)
+        if !FrontApp.switchPending, let front = NSWorkspace.shared.frontmostApplication {
+            SessionLog.timed("list: front window") { stampFocusedWindow(of: front.processIdentifier) }
+        }
 
         let scope = Prefs.scope
         let includeMinimized = Prefs.includeMinimized

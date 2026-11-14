@@ -184,7 +184,7 @@ final class SwitcherController {
 
     private func makeItems() -> (items: [SwitchItem], currentIndex: Int?) {
         let wins = windows.candidates()
-        let frontPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        let frontPID = FrontApp.pid
         let byName = Prefs.sort == .name
         func less(_ a: String, _ b: String) -> Bool { a.localizedStandardCompare(b) == .orderedAscending }
 
@@ -219,7 +219,7 @@ final class SwitcherController {
 
     /// Opens the switcher with the previous app/window selected. Returns false if there's nothing to switch to.
     /// A list built ahead of time (when fingers touch down or ⌘ is pressed), used if it's still fresh.
-    private var prepared: (items: [SwitchItem], currentIndex: Int?, at: Double)?
+    private var prepared: (items: [SwitchItem], currentIndex: Int?, front: pid_t?, at: Double)?
     private static let preparedMaxAge = 1.0
 
     /// Builds the list ahead of time so opening is instant. Cheap to call often; skips if recently built.
@@ -227,7 +227,7 @@ final class SwitcherController {
         guard !isShowing else { return }
         if let p = prepared, CACurrentMediaTime() - p.at < 0.3 { return }
         let (items, currentIndex) = SessionLog.timed("building the list at touch-down") { makeItems() }
-        prepared = (items, currentIndex, CACurrentMediaTime())
+        prepared = (items, currentIndex, FrontApp.pid, CACurrentMediaTime())
     }
 
     /// One-time warm-up at launch: builds a list and renders the overlay off-screen, so the first real open
@@ -259,7 +259,8 @@ final class SwitcherController {
         guard let vis = screen?.visibleFrame else { return false }
 
         var (items, currentIndex): ([SwitchItem], Int?)
-        if let p = prepared, CACurrentMediaTime() - p.at < Self.preparedMaxAge {
+        // (Rebuilt if another app came to the front since: the list's order and current item would be off.)
+        if let p = prepared, CACurrentMediaTime() - p.at < Self.preparedMaxAge, p.front == FrontApp.pid {
             (items, currentIndex) = (p.items, p.currentIndex)
         } else {
             (items, currentIndex) = SessionLog.timed("building the list on open") { makeItems() }
@@ -360,6 +361,7 @@ final class SwitcherController {
             windows.noteActivated(w.id)
             SessionLog.timed("activating a \(w.app.localizedName ?? "?") window") { Activator.activate(window: w) }
         }
+        FrontApp.switching(to: targetApp.processIdentifier)
         let name = targetApp.localizedName ?? "?"
         SessionLog.note("commit: switching to \(name) (selected=\(index))")
         // With diagnostics on, check that the switch actually landed (after the safety net has had its chance).
