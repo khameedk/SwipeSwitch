@@ -26,6 +26,7 @@ struct SettingsView: View {
     @AppStorage(Prefs.Key.layout) private var layout: Layout = .grid
     @AppStorage(Prefs.Key.columns) private var columns = 6
     @AppStorage(Prefs.Key.iconSize) private var iconSize = 64.0
+    @AppStorage(Prefs.Key.maxWidthPercent) private var maxWidthPercent = 92.0
     @AppStorage(Prefs.Key.appearSpeed) private var appearSpeed: AppearSpeed = .quick
     @AppStorage(Prefs.Key.showAllNames) private var showAllNames = false
     @AppStorage(Prefs.Key.wrap) private var wrap = false
@@ -169,8 +170,18 @@ struct SettingsView: View {
                 Stepper("Columns: \(columns)", value: $columns, in: 3...12)
                     .disabled(layout == .row)
                 LabeledContent("Icon size") {
-                    Slider(value: $iconSize, in: 40...112, step: 8).frame(width: 220)
+                    HStack {
+                        Slider(value: $iconSize, in: 40...150, step: 2).frame(width: 220)
+                        Text("\(Int(iconSize)) pt").monospacedDigit().foregroundStyle(.secondary).frame(width: 48, alignment: .trailing)
+                    }
                 }
+                LabeledContent("Maximum width") {
+                    HStack {
+                        Slider(value: $maxWidthPercent, in: 50...100, step: 1).frame(width: 220)
+                        Text("\(Int(maxWidthPercent))%").monospacedDigit().foregroundStyle(.secondary).frame(width: 48, alignment: .trailing)
+                    }
+                }
+                note("Widest the switcher gets, as a share of the screen. When the icons don't fit across, it wraps to more rows.")
                 Toggle("Show names under every app", isOn: $showAllNames)
                     .disabled(mode == .windows)
                 Picker("Show and hide the switcher", selection: $appearSpeed) {

@@ -261,9 +261,10 @@ final class SwitcherController {
         guard items.count >= (currentIndex == nil ? 1 : 2) else { return false }
 
         let windowsMode = Prefs.mode == .windows
-        let icon = CGFloat(windowsMode ? min(Prefs.iconSize, 72) : Prefs.iconSize)
+        let icon = CGFloat(Prefs.iconSize)
         var style = windowsMode ? CellStyle.windows(icon: icon) : CellStyle.apps(icon: icon)
-        let maxW = vis.width * 0.92
+        // Too many to fit across: the grid wraps to more rows; the single row wraps (windows) or shrinks icons (apps).
+        let maxW = vis.width * Prefs.maxWidthFraction
         var cols: Int
         if Prefs.layout == .grid {
             cols = min(Prefs.columns, items.count, style.columnsThatFit(width: maxW))

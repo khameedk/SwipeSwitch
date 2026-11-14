@@ -40,6 +40,8 @@ enum Prefs {
         static let layout = "layout"
         static let columns = "columns"
         static let iconSize = "iconSize"
+        /// Widest the switcher may get, as a percentage of the screen's width.
+        static let maxWidthPercent = "maxWidthPercent"
         static let showAllNames = "showAllNames"
         static let appearSpeed = "appearSpeed"
         static let wrap = "wrapAround"
@@ -68,6 +70,7 @@ enum Prefs {
         Key.layout: Layout.grid.rawValue,
         Key.columns: 6,
         Key.iconSize: 64.0,
+        Key.maxWidthPercent: 92.0,
         Key.showAllNames: false,
         Key.appearSpeed: AppearSpeed.quick.rawValue,
         Key.wrap: false,
@@ -116,7 +119,8 @@ enum Prefs {
     static var maxApps: Int { max(2, d.integer(forKey: Key.maxApps)) }
     static var layout: Layout { Layout(rawValue: d.string(forKey: Key.layout) ?? "") ?? .grid }
     static var columns: Int { max(1, d.integer(forKey: Key.columns)) }
-    static var iconSize: Double { min(max(d.double(forKey: Key.iconSize), 24), 160) }
+    static var iconSize: Double { min(max(d.double(forKey: Key.iconSize), 24), 150) }
+    static var maxWidthFraction: Double { min(max(d.double(forKey: Key.maxWidthPercent), 40), 100) / 100 }
     static var showAllNames: Bool { d.bool(forKey: Key.showAllNames) }
     static var appearSpeed: AppearSpeed { AppearSpeed(rawValue: d.string(forKey: Key.appearSpeed) ?? "") ?? .quick }
     static var mode: SwitchMode { SwitchMode(rawValue: d.string(forKey: Key.mode) ?? "") ?? .apps }
