@@ -43,11 +43,14 @@ through them, then lift your fingers to switch. It works like ⌘-Tab, but on th
    Trackpad settings so you can move that gesture to four fingers. See [Gesture conflicts](#gesture-conflicts).
 
 Each release is built on GitHub from the tagged source and comes with a signed build record, so you can
-check the download came from this repository (needs the [GitHub CLI](https://cli.github.com)):
+check the download came from this repository (needs the [GitHub CLI](https://cli.github.com)). In the folder
+you downloaded it to (with only one SwipeSwitch zip in it), run:
 
 ```bash
-gh attestation verify SwipeSwitch-vX.Y.Z.zip --repo khameedk/SwipeSwitch
+gh attestation verify SwipeSwitch-v*.zip --repo khameedk/SwipeSwitch
 ```
+
+Each release's notes also show this command with that release's exact file name.
 
 To update, download the newest release and replace the app. Your settings and permissions are kept: releases
 are signed with SwipeSwitch's own certificate, so macOS recognises each update as the same app.
