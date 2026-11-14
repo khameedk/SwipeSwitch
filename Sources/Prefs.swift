@@ -2,6 +2,12 @@ import Foundation
 
 enum Scope: String { case all, current }
 enum Layout: String { case grid, row }
+/// How the switcher appears and disappears.
+enum AppearSpeed: String {
+    case instant, quick, smooth
+    /// Seconds for the fade out (the fade in is set in SwitcherController.begin).
+    var hideDuration: Double { switch self { case .instant: return 0; case .quick: return 0.08; case .smooth: return 0.12 } }
+}
 enum SwipeDirection: String { case right, left }
 enum SwitchMode: String { case apps, windows }
 enum SortOrder: String { case recent, name }
@@ -35,6 +41,7 @@ enum Prefs {
         static let columns = "columns"
         static let iconSize = "iconSize"
         static let showAllNames = "showAllNames"
+        static let appearSpeed = "appearSpeed"
         static let wrap = "wrapAround"
         static let excluded = "excludedBundleIDs"
         static let didOnboard = "didOnboard"
@@ -62,6 +69,7 @@ enum Prefs {
         Key.columns: 6,
         Key.iconSize: 64.0,
         Key.showAllNames: false,
+        Key.appearSpeed: AppearSpeed.quick.rawValue,
         Key.wrap: false,
         Key.excluded: "",
         Key.mode: SwitchMode.apps.rawValue,
@@ -110,6 +118,7 @@ enum Prefs {
     static var columns: Int { max(1, d.integer(forKey: Key.columns)) }
     static var iconSize: Double { min(max(d.double(forKey: Key.iconSize), 24), 160) }
     static var showAllNames: Bool { d.bool(forKey: Key.showAllNames) }
+    static var appearSpeed: AppearSpeed { AppearSpeed(rawValue: d.string(forKey: Key.appearSpeed) ?? "") ?? .quick }
     static var mode: SwitchMode { SwitchMode(rawValue: d.string(forKey: Key.mode) ?? "") ?? .apps }
     static var includeMinimized: Bool { d.bool(forKey: Key.includeMinimized) }
     static var includeHidden: Bool { d.bool(forKey: Key.includeHidden) }

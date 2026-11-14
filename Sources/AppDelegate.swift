@@ -110,6 +110,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // environment variable can make the shipped app switch windows, edit BTT gestures or save screenshots.
     #if SWIPESWITCH_DEV
     private func runDevHooks() {
+        if let a = ProcessInfo.processInfo.environment["SWIPESWITCH_APPEARANCE"] { switcher.forceAppearance(a) }
         if ProcessInfo.processInfo.environment["SWIPESWITCH_KEYDEMO"] != nil { runKeyboardDemo() }
         // SWIPESWITCH_BTT_TEST=scan lists BTT's swipe gestures (read-only);
         // SWIPESWITCH_BTT_TEST=<gesture uuid> adds the condition to that one gesture, then removes it again. Then quits.

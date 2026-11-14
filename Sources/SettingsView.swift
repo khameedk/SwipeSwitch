@@ -26,6 +26,7 @@ struct SettingsView: View {
     @AppStorage(Prefs.Key.layout) private var layout: Layout = .grid
     @AppStorage(Prefs.Key.columns) private var columns = 6
     @AppStorage(Prefs.Key.iconSize) private var iconSize = 64.0
+    @AppStorage(Prefs.Key.appearSpeed) private var appearSpeed: AppearSpeed = .quick
     @AppStorage(Prefs.Key.showAllNames) private var showAllNames = false
     @AppStorage(Prefs.Key.wrap) private var wrap = false
     @AppStorage(Prefs.Key.excluded) private var excludedRaw = ""
@@ -172,6 +173,11 @@ struct SettingsView: View {
                 }
                 Toggle("Show names under every app", isOn: $showAllNames)
                     .disabled(mode == .windows)
+                Picker("Show and hide the switcher", selection: $appearSpeed) {
+                    Text("Instantly").tag(AppearSpeed.instant)
+                    Text("Quickly").tag(AppearSpeed.quick)
+                    Text("Smoothly").tag(AppearSpeed.smooth)
+                }
                 Toggle("Wrap around at the ends", isOn: $wrap)
             }
 

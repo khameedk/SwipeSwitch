@@ -100,7 +100,7 @@ struct SwitcherView: View {
         .padding(CellStyle.padding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(VisualEffectBackground(radius: 22))
-        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Color.primary.opacity(0.08), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Color.primary.opacity(0.14), lineWidth: 1))
         .scaleEffect(model.appeared ? 1 : 0.96)
         .opacity(model.appeared ? 1 : 0)
     }
@@ -129,8 +129,12 @@ struct SwitcherView: View {
         .frame(width: style.width, height: style.height)
         .background {
             if isSelected {
+                // Darker in light mode, lighter in dark mode (primary is black or white), with a thin outline so the
+                // selection stands out from the panel behind it.
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.primary.opacity(0.13))
+                    .fill(Color.primary.opacity(0.2))
+                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(Color.primary.opacity(0.45), lineWidth: 1))
                     .matchedGeometryEffect(id: "selection", in: ns)
             }
         }
@@ -284,7 +288,8 @@ final class SwitcherController {
         model.currentIndex = currentIndex
         // Start on the item after the current one (the previous app/window when sorted by last active).
         model.selected = startAtEnd ? items.count - 1 : (currentIndex.map { ($0 + 1) % items.count } ?? 0)
-        model.appeared = false
+        let speed = Prefs.appearSpeed
+        model.appeared = speed == .instant   // instant: fully drawn from the first frame
 
         let size = style.panelSize(count: items.count, columns: cols)
         panel.setFrame(NSRect(x: (vis.midX - size.width / 2).rounded(),
@@ -294,8 +299,9 @@ final class SwitcherController {
         generation += 1
         panel.alphaValue = 1
         panel.orderFrontRegardless()
-        DispatchQueue.main.async {
-            withAnimation(.spring(response: 0.22, dampingFraction: 0.9)) { self.model.appeared = true }
+        if speed != .instant {
+            let animation: Animation = speed == .quick ? .easeOut(duration: 0.09) : .spring(response: 0.22, dampingFraction: 0.9)
+            DispatchQueue.main.async { withAnimation(animation) { self.model.appeared = true } }
         }
         let gen = generation
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { if gen == self.generation { self.panel.invalidateShadow() } }
@@ -398,9 +404,15 @@ final class SwitcherController {
         } else {
             BetterTouchTool.setActive(false)
         }
-        withAnimation(.easeOut(duration: 0.12)) { model.appeared = false }
+        let duration = Prefs.appearSpeed.hideDuration
+        if duration == 0 {
+            model.appeared = false
+            panel.orderOut(nil)
+            return
+        }
+        withAnimation(.easeOut(duration: duration)) { model.appeared = false }
         NSAnimationContext.runAnimationGroup({ ctx in
-            ctx.duration = 0.12
+            ctx.duration = duration
             panel.animator().alphaValue = 0
         }, completionHandler: {
             if gen == self.generation { self.panel.orderOut(nil) }
@@ -408,6 +420,11 @@ final class SwitcherController {
     }
 
     #if SWIPESWITCH_DEV
+    /// Forces the overlay into light or dark mode (SWIPESWITCH_APPEARANCE=light|dark), for checking both.
+    func forceAppearance(_ name: String) {
+        panel.appearance = NSAppearance(named: name == "dark" ? .darkAqua : .aqua)
+    }
+
     /// Renders the overlay's current contents to a PNG (used by demo mode for visual checks).
     func snapshot(to path: String) {
         guard let view = panel.contentView, let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }

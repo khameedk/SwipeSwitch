@@ -17,6 +17,10 @@ enum BTTSecret {
     static var value: String {
         lock.lock(); defer { lock.unlock() }
         if let cached { return cached }
+        #if SWIPESWITCH_DEV
+        // Test runs of a --dev build are a different binary, so the Keychain would ask for your password each time.
+        if ProcessInfo.processInfo.environment["SWIPESWITCH_NO_KEYCHAIN"] != nil { cached = ""; return "" }
+        #endif
         let v = moveOutOfPreferences() ?? read()
         cached = v
         return v
