@@ -31,18 +31,7 @@ through them, then lift your fingers to switch. It works like ⌘-Tab, but on th
 
 ## Install
 
-### Option 1: Homebrew
-
-```bash
-brew trust --tap khameedk/tap
-brew install --cask khameedk/tap/swipeswitch
-```
-
-Homebrew asks you to trust taps from outside its own catalogue before installing from them; the
-`brew trust` line trusts this tap, which only contains SwipeSwitch (undo with `brew untrust --tap khameedk/tap`). Then follow steps 2 to 4 below (Open Anyway, Accessibility,
-gesture check). Update with `brew upgrade --cask swipeswitch`.
-
-### Option 2: Download
+### Option 1: Download
 
 1. Download the latest **SwipeSwitch-vX.Y.Z.zip** from [Releases](https://github.com/khameedk/SwipeSwitch/releases/latest),
    unzip it, and move **SwipeSwitch.app** to Applications.
@@ -63,6 +52,17 @@ gh attestation verify SwipeSwitch-vX.Y.Z.zip --repo khameedk/SwipeSwitch
 To update, download the newest release and replace the app. Your settings and permissions are kept: releases
 are signed with SwipeSwitch's own certificate, so macOS recognises each update as the same app.
 
+### Option 2: Homebrew
+
+```bash
+brew trust --tap khameedk/tap
+brew install --cask khameedk/tap/swipeswitch
+```
+
+Homebrew asks you to trust taps from outside its own catalogue before installing from them; the
+`brew trust` line trusts this tap, which only contains SwipeSwitch (undo with `brew untrust --tap khameedk/tap`). Then follow steps 2 to 4 of Option 1 (Open Anyway, Accessibility,
+gesture check). Update with `brew upgrade --cask swipeswitch`.
+
 ### Option 3: Build from source
 
 Build it on your own Mac, so you can read everything it does first and macOS doesn't block it as a download.
@@ -79,7 +79,7 @@ Build it on your own Mac, so you can read everything it does first and macOS doe
    ```
    This builds `SwipeSwitch.app`, copies it to `/Applications` and opens it.
 3. When asked, grant **Accessibility** access in System Settings › Privacy & Security › Accessibility.
-4. Check Settings for a gesture-conflict warning, as in Option 2.
+4. Check Settings for a gesture-conflict warning, as in Option 1.
 
 To update later, run `git pull` and `./build.sh --install` again. Your settings and permissions are kept.
 
