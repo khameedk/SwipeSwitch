@@ -38,8 +38,8 @@ brew install --cask khameedk/tap/swipeswitch
 ```
 
 Homebrew asks you to trust taps from outside its own catalogue before installing from them; the
-`brew trust` line trusts this tap, which only contains SwipeSwitch (undo with `brew untrust --tap khameedk/tap`). Then follow steps 2 and 3 below (Open Anyway, Accessibility). Update
-with `brew upgrade --cask swipeswitch`.
+`brew trust` line trusts this tap, which only contains SwipeSwitch (undo with `brew untrust --tap khameedk/tap`). Then follow steps 2 to 4 below (Open Anyway, Accessibility,
+gesture check). Update with `brew upgrade --cask swipeswitch`.
 
 ### Option 2: Download
 
@@ -48,6 +48,9 @@ with `brew upgrade --cask swipeswitch`.
 2. Open it. SwipeSwitch isn't notarized by Apple (that needs a paid developer account), so macOS blocks the
    first launch: go to **System Settings › Privacy & Security**, scroll down, and click **Open Anyway**.
 3. When asked, grant **Accessibility** access in System Settings › Privacy & Security › Accessibility.
+4. Check SwipeSwitch's Settings for a **gesture-conflict warning**. Many Macs already use three-finger
+   swipes for something (such as swiping between full-screen apps); the warning has a button that opens
+   Trackpad settings so you can move that gesture to four fingers. See [Gesture conflicts](#gesture-conflicts).
 
 Each release is built on GitHub from the tagged source and comes with a signed build record, so you can
 check the download came from this repository (needs the [GitHub CLI](https://cli.github.com)):
@@ -56,7 +59,8 @@ check the download came from this repository (needs the [GitHub CLI](https://cli
 gh attestation verify SwipeSwitch-vX.Y.Z.zip --repo khameedk/SwipeSwitch
 ```
 
-To update, download the newest release and replace the app. Your settings and permissions are kept.
+To update, download the newest release and replace the app. Your settings and permissions are kept: releases
+are signed with SwipeSwitch's own certificate, so macOS recognises each update as the same app.
 
 ### Option 3: Build from source
 
@@ -74,8 +78,13 @@ Build it on your own Mac, so you can read everything it does first and macOS doe
    ```
    This builds `SwipeSwitch.app`, copies it to `/Applications` and opens it.
 3. When asked, grant **Accessibility** access in System Settings › Privacy & Security › Accessibility.
+4. Check Settings for a gesture-conflict warning, as in Option 2.
 
 To update later, run `git pull` and `./build.sh --install` again. Your settings and permissions are kept.
+
+Your own build is signed differently from the releases (they use a certificate only the project has), so macOS
+treats the two as different apps. If you switch between a downloaded release and your own build, remove
+SwipeSwitch from the Accessibility list and add it again once.
 
 ## Using it
 
@@ -243,7 +252,7 @@ What else it touches:
   SwipeSwitch to borrow its permissions. Release builds contain no demo or test code (see
   [Development](#development)).
 
-You can check all of this in the source: everything lives in [`Sources/`](Sources) (about 1,700 lines of Swift).
+You can check all of this in the source: everything lives in [`Sources/`](Sources) (about 3,000 lines of Swift).
 
 ### Security checks
 
@@ -286,12 +295,15 @@ update could still change them, so if something stops working after an update, p
   Settings › Gesture.
 - **The switcher opens but doesn't switch apps.** Grant Accessibility access (Settings › Status shows
   whether it's granted). If it's already on, remove SwipeSwitch from the Accessibility list and add it again.
-- **A swipe opens the switcher but sometimes doesn't switch.** Turn on Settings › Diagnostics › **Log
+  This is needed once after switching between a downloaded release and a copy you built yourself, since
+  macOS sees them as differently signed.
+- **The switcher sometimes doesn't switch, or doesn't appear.** Turn on Settings › Diagnostics › **Log
   switcher activity**, reproduce it, then read the log in Terminal:
   ```bash
   /usr/bin/log show --last 10m --predicate 'subsystem == "io.github.khameedk.swipeswitch"'
   ```
-  Each switch ends with `CONFIRMED` or `FAILED`. Turn logging off again when you're done.
+  Each switch ends with `CONFIRMED` or `FAILED`, and lines starting `slow:` show anything that held
+  SwipeSwitch up. Logging turns itself off after an hour.
 - **It stopped responding after waking from sleep.** SwipeSwitch reconnects to the trackpad after
   waking on its own; if it still doesn't respond, quit it from the menu bar icon and open it again.
 - **The menu bar icon is missing** on a Mac with a notch. macOS hides icons behind the notch when the
@@ -302,9 +314,10 @@ update could still change them, so if something stops working after an update, p
 1. Menu bar icon › **Quit SwipeSwitch**, and turn off "Launch at login" first if you enabled it.
 2. Delete `/Applications/SwipeSwitch.app`.
 3. Remove SwipeSwitch from System Settings › Privacy & Security › Accessibility (and Screen Recording).
-4. Optionally delete its settings:
+4. Optionally delete its settings, and the BTT shared secret if you entered one:
    ```bash
    defaults delete io.github.khameedk.swipeswitch
+   security delete-generic-password -s io.github.khameedk.swipeswitch.btt-shared-secret
    ```
 
 ## Development
