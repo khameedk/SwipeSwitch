@@ -2,6 +2,7 @@
 
 [![Build](https://github.com/khameedk/SwipeSwitch/actions/workflows/build.yml/badge.svg)](https://github.com/khameedk/SwipeSwitch/actions/workflows/build.yml)
 [![CodeQL](https://github.com/khameedk/SwipeSwitch/actions/workflows/codeql.yml/badge.svg)](https://github.com/khameedk/SwipeSwitch/actions/workflows/codeql.yml)
+[![Semgrep](https://github.com/khameedk/SwipeSwitch/actions/workflows/semgrep.yml/badge.svg)](https://github.com/khameedk/SwipeSwitch/actions/workflows/semgrep.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/khameedk/SwipeSwitch/badge)](https://scorecard.dev/viewer/?uri=github.com/khameedk/SwipeSwitch)
 
 Switch apps and windows on your Mac with a trackpad swipe.
