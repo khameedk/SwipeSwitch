@@ -13,17 +13,34 @@ permissions:
 
 jobs:
   release:
-    runs-on: macos-latest   # Apple Silicon runner
+    runs-on: macos-26   # Apple Silicon runner
     permissions:
       contents: write        # create the release
       id-token: write        # sign the provenance record
       attestations: write    # store the provenance record
     env:
       TAG: ${{ github.ref_name }}
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0   # full history, to check the tag below
+
+      # Only code that's on main gets released: a v* tag on any other commit (a branch, or one that was never pushed
+      # to main) stops here, before anything is built or signed.
+      - name: Check the tagged commit is on main
+        if: github.ref_type == 'tag'
+        run: |
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main ||
+            { echo "error: $TAG points at a commit that isn't on main" >&2; exit 1; }
+
+      # The runner image and Xcode are pinned (DEVELOPER_DIR above), so builds don't change toolchain silently.
+      - name: Show the toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          swiftc --version
 
       - name: Set the app version from the tag
         if: github.ref_type == 'tag'
@@ -60,6 +77,9 @@ jobs:
 
       - name: Check for networking code (source and binary)
         run: ./scripts/check-no-network.sh build/SwipeSwitch.app/Contents/MacOS/SwipeSwitch
+
+      - name: Check hardening (entitlements, hardened runtime, PIE, stack protection)
+        run: ./scripts/check-hardening.sh build/SwipeSwitch.app
 
       - name: Zip the app and record its checksum
         if: github.ref_type == 'tag'

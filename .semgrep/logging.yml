@@ -1,0 +1,24 @@
+# SwipeSwitch's own Semgrep rules (run by .github/workflows/semgrep.yml, which fails on any match).
+# Log messages may hold counts, positions and timings. App names go in the separate `app:`/`front:` arguments of
+# SessionLog, which macOS logs only as a hash. Window titles, the BetterTouchTool secret and keystrokes never go in.
+# These are pattern checks on how values are named, not a full data-flow analysis: they catch the likely mistakes.
+rules:
+  - id: no-sensitive-values-in-log-messages
+    languages: [regex]
+    paths:
+      include: ["Sources/*.swift"]
+    # A log call whose message interpolates something named like a title, secret, password, token, key code,
+    # app name (`localizedName`, or a variable called `name`).
+    pattern-regex: '(SessionLog\.(note|problem|timed)|NSLog|logger\.\w+)\(".*\\\((name\b|[^)]*(?i:title|secret|password|passwd|token|keycode|localizedName))'
+    message: >-
+      A log message includes what looks like a window title, secret, keystroke or app name. Pass app names as
+      SessionLog's `app:` argument (logged as a hash) and keep the rest out of the log.
+    severity: ERROR
+  - id: no-sensitive-values-as-nslog-arguments
+    languages: [regex]
+    paths:
+      include: ["Sources/*.swift"]
+    pattern-regex: 'NSLog\("[^"]*%@[^"]*",[^\n]*(?i:title|secret|password|passwd|token|keycode|localizedName)'
+    message: >-
+      An NSLog argument looks like a window title, secret, keystroke or app name. Keep it out of the log.
+    severity: ERROR

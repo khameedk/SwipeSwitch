@@ -1,4 +1,4 @@
-# Builds the app from the code in this repo and checks it contains no networking code.
+# Builds the app from the code in this repo and checks it contains no networking code and keeps its hardening.
 name: Build
 
 on:
@@ -12,11 +12,20 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-latest   # Apple Silicon runner
+    runs-on: macos-26   # Apple Silicon runner
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      # The runner image and Xcode are pinned (DEVELOPER_DIR above), so builds don't change toolchain silently.
+      - name: Show the toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          swiftc --version
 
       - name: Build the development variant (demo and test hooks)
         run: ./build.sh --dev
@@ -26,3 +35,6 @@ jobs:
 
       - name: Check for networking code (source and binary)
         run: ./scripts/check-no-network.sh build/SwipeSwitch.app/Contents/MacOS/SwipeSwitch
+
+      - name: Check hardening (entitlements, hardened runtime, PIE, stack protection)
+        run: ./scripts/check-hardening.sh build/SwipeSwitch.app

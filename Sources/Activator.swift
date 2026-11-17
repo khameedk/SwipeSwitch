@@ -32,8 +32,8 @@ enum Activator {
             let el = AXUIElementCreateApplication(app.processIdentifier)
             AXUIElementSetAttributeValue(el, kAXFrontmostAttribute as CFString, kCFBooleanTrue)
             var win: CFTypeRef?
-            if AXUIElementCopyAttributeValue(el, kAXMainWindowAttribute as CFString, &win) == .success, let w = win {
-                AXUIElementPerformAction(w as! AXUIElement, kAXRaiseAction as CFString)
+            if AXUIElementCopyAttributeValue(el, kAXMainWindowAttribute as CFString, &win) == .success, let w = AX.element(win) {
+                AXUIElementPerformAction(w, kAXRaiseAction as CFString)
             }
             DispatchQueue.main.async { activateNow() }
         }
@@ -97,7 +97,7 @@ enum Activator {
         func scheduleSafetyNet() {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 guard switchID == thisSwitch, !app.isTerminated, !inFront() else { return }
-                SessionLog.note("safety net: \(app.localizedName ?? "?") not in front after 0.3 s, asking again")
+                SessionLog.note("safety net: app not in front after 0.3 s, asking again", app: app.localizedName)
                 axQueue.async {
                     if let win = target.window { AXUIElementPerformAction(win, kAXRaiseAction as CFString) }
                     AXUIElementSetAttributeValue(appEl, kAXFrontmostAttribute as CFString, kCFBooleanTrue)
@@ -121,7 +121,7 @@ enum Activator {
             var win: AXUIElement?
             var value: CFTypeRef?
             if AXUIElementCopyAttributeValue(appEl, kAXWindowsAttribute as CFString, &value) == .success,
-               let list = value as? [AXUIElement] {
+               let list = AX.elements(value) {
                 win = list.first { PrivateAPI.windowID(of: $0) == entry.id }
             }
             if win == nil { win = PrivateAPI.windowElementOnAnyDesktop(pid: pid, id: entry.id) }

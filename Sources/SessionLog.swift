@@ -3,8 +3,10 @@ import QuartzCore
 
 /// Optional diagnostic log of switcher sessions: when it opened, steps, how the swipe ended, and whether the switch
 /// landed. Off by default (Settings › Diagnostics), and turns itself off an hour after being turned on: it's meant for
-/// the moment a problem is happening. Goes to macOS's unified log on this Mac only, and contains app
-/// names and positions, never keystrokes or window titles. Read it with:
+/// the moment a problem is happening. Goes to macOS's unified log on this Mac only. Messages are counts, positions
+/// and timings; app names are passed separately and logged only as a hash (the same app gets the same hash, so a
+/// session can still be followed, but the log doesn't say which app it was). Never keystrokes, window titles or the
+/// BetterTouchTool secret. Read it with:
 ///   /usr/bin/log show --last 10m --predicate 'subsystem == "io.github.khameedk.swipeswitch"'
 enum SessionLog {
     private static let logger = Logger(subsystem: "io.github.khameedk.swipeswitch", category: "session")
@@ -38,29 +40,43 @@ enum SessionLog {
         }
     }
 
-    /// The message is only built when logging is on, so this costs nothing when it's off.
-    static func note(_ message: @autoclosure () -> String) {
+    /// The message is only built when logging is on, so this costs nothing when it's off. `app` and `front` are app
+    /// names: logged as hashes, never in the clear. Don't put app names, titles or secrets in `message` itself.
+    static func note(_ message: @autoclosure () -> String, app: String? = nil, front: String? = nil) {
         guard enabled else { return }
-        let m = message()
-        logger.notice("\(m, privacy: .public)")
+        write(.default, message(), app: app, front: front)
+    }
+
+    static func problem(_ message: @autoclosure () -> String, app: String? = nil, front: String? = nil) {
+        guard enabled else { return }
+        write(.error, message(), app: app, front: front)
+    }
+
+    /// The names have to go straight into the logger call for macOS to hash them, hence the four variants.
+    private static func write(_ type: OSLogType, _ m: String, app: String?, front: String?) {
+        switch (app, front) {
+        case let (a?, f?):
+            logger.log(level: type, "\(m, privacy: .public) [app \(a, privacy: .private(mask: .hash))] [front \(f, privacy: .private(mask: .hash))]")
+        case let (a?, nil):
+            logger.log(level: type, "\(m, privacy: .public) [app \(a, privacy: .private(mask: .hash))]")
+        case let (nil, f?):
+            logger.log(level: type, "\(m, privacy: .public) [front \(f, privacy: .private(mask: .hash))]")
+        case (nil, nil):
+            logger.log(level: type, "\(m, privacy: .public)")
+        }
     }
 
     /// Runs `body` and logs it if it took longer than `limit` seconds. Used around main-thread work that waits on other
     /// apps: while it runs, touch input waits too.
     @discardableResult
-    static func timed<T>(_ label: @autoclosure () -> String, limit: Double = 0.05, _ body: () throws -> T) rethrows -> T {
+    static func timed<T>(_ label: @autoclosure () -> String, app: String? = nil, limit: Double = 0.05,
+                         _ body: () throws -> T) rethrows -> T {
         guard enabled else { return try body() }
         let start = CACurrentMediaTime()
         defer {
             let took = CACurrentMediaTime() - start
-            if took > limit { problem("slow: \(label()) took \(Int(took * 1000)) ms") }
+            if took > limit { problem("slow: \(label()) took \(Int(took * 1000)) ms", app: app) }
         }
         return try body()
-    }
-
-    static func problem(_ message: @autoclosure () -> String) {
-        guard enabled else { return }
-        let m = message()
-        logger.error("\(m, privacy: .public)")
     }
 }

@@ -8,6 +8,9 @@ final class SettingsStatus: ObservableObject {
     @Published var loginStatus = SMAppService.mainApp.status
     @Published var loginError: String?
     @Published var screenRecording = CGPreflightScreenCaptureAccess()
+    @Published var bttSecretLoaded = BTTSecret.loaded != nil
+    @Published var bttSecretProblem = BTTSecret.problem
+    @Published var warnings = Health.warnings
 }
 
 struct SettingsView: View {
@@ -204,9 +207,17 @@ struct SettingsView: View {
                     .onChange(of: bttIntegration) { on in if on { bttSetup.check(ask: true) } }
                 if bttIntegration {
                     LabeledContent("Shared secret") {
-                        // Kept in the Keychain (BTTSecret), not in preferences.
-                        SecureField("Optional", text: Binding(get: { BTTSecret.value }, set: { BTTSecret.set($0) }))
+                        // Kept in the Keychain (BTTSecret), not in preferences. Shown once it has been read (in the
+                        // background), so drawing Settings never waits on a Keychain prompt.
+                        SecureField(status.bttSecretLoaded ? "Optional" : "Reading from the Keychain…",
+                                    text: Binding(get: { BTTSecret.loaded ?? "" },
+                                                  set: { BTTSecret.set($0); status.bttSecretProblem = BTTSecret.problem }))
                             .frame(width: 200)
+                            .disabled(!status.bttSecretLoaded)
+                    }
+                    if let problem = status.bttSecretProblem {
+                        Label(problem, systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
                     }
                     if BetterTouchTool.externalScriptingAllowed == false {
                         note("In BetterTouchTool, turn on Settings › Scripting BTT › “Allow external BetterTouchTool Scripting”.", color: .red)
@@ -218,6 +229,10 @@ struct SettingsView: View {
             }
 
             Section("Status") {
+                ForEach(status.warnings, id: \.self) { warning in
+                    Label(warning, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+                }
                 HStack {
                     Label(status.axTrusted ? "Accessibility access granted" : "Accessibility access needed",
                           systemImage: status.axTrusted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
@@ -251,7 +266,7 @@ struct SettingsView: View {
                 if diagnosticLogging, diagnosticLoggingUntil > 0 {
                     note("Turns itself off at \(Date(timeIntervalSince1970: diagnosticLoggingUntil).formatted(date: .omitted, time: .shortened)).")
                 }
-                note("Turn it on while a problem is happening; it turns itself off after an hour. Records each switch (when it opened, how the swipe ended, which app it switched to, whether it landed, and any step that was slow) in macOS's log on this Mac. App names only: no keystrokes or window titles.")
+                note("Turn it on while a problem is happening; it turns itself off after an hour. Records each switch (when it opened, how the swipe ended, whether it landed, and any step that was slow) in macOS's log on this Mac. App names are logged only as a hash; no keystrokes or window titles.")
             }
 
             Section {
@@ -305,6 +320,9 @@ struct SettingsView: View {
         update(\.conflict, Prefs.gestureConflict(fingers: fingers))
         update(\.loginStatus, SMAppService.mainApp.status)
         update(\.screenRecording, CGPreflightScreenCaptureAccess())
+        update(\.bttSecretLoaded, BTTSecret.loaded != nil)
+        update(\.bttSecretProblem, BTTSecret.problem)
+        update(\.warnings, Health.warnings)
     }
 
     /// The once-a-second check only matters while the Settings window is on screen.

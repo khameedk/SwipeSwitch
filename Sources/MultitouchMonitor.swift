@@ -11,6 +11,25 @@ struct TouchFrame {
     var raw = 0
     /// When the trackpad delivered the frame (CACurrentMediaTime), before it waited for the main thread.
     var time = 0.0
+    /// False if the touch data didn't look like the layout in Bridge.h (see `TouchCheck`).
+    var valid = true
+}
+
+/// Sanity checks on the touch data, which comes from a private framework whose struct layout (Bridge.h) was copied
+/// by hand. If a macOS update changes that layout, the fields read back as nonsense; after a run of such frames,
+/// swipes are turned off (fail closed) instead of acting on garbage. Costs a few comparisons per finger per frame.
+enum TouchCheck {
+    /// More contacts than any trackpad reports: the count itself is wrong, so the touches aren't read at all.
+    static let maxContacts: Int32 = 32
+    /// Consecutive bad frames (about a third of a second of touching) before swipes are turned off.
+    static let badFramesToDisable = 30
+
+    static func plausible(_ t: MTTouch) -> Bool {
+        let p = t.normalized.position
+        return (0...7).contains(t.state)
+            && p.x.isFinite && p.y.isFinite && (-0.5...1.5).contains(p.x) && (-0.5...1.5).contains(p.y)
+            && t.size.isFinite && t.size >= 0 && t.size < 100
+    }
 }
 
 /// Reads raw finger data from every trackpad through Apple's private MultitouchSupport framework.
@@ -89,9 +108,23 @@ final class MultitouchMonitor {
         return Unmanaged<CFArray>.fromOpaque(raw).takeRetainedValue()
     }
 
+    /// Consecutive frames that failed `TouchCheck` (main thread).
+    private var badFrames = 0
+
+    /// Main thread. Returns false if the frame should be ignored.
+    func check(_ frame: TouchFrame) -> Bool {
+        if frame.valid { badFrames = 0; return true }
+        badFrames += 1
+        if badFrames >= TouchCheck.badFramesToDisable, !Health.has(.touchData) {
+            Health.report(.touchData)
+            stop()
+        }
+        return false
+    }
+
     @discardableResult
     func start() -> Int {
-        guard isLoaded, devices.isEmpty, let list = copyDeviceList() else { return devices.count }
+        guard isLoaded, devices.isEmpty, !Health.has(.touchData), let list = copyDeviceList() else { return devices.count }
         deviceList = list
         for i in 0..<CFArrayGetCount(list) {
             guard let raw = CFArrayGetValueAtIndex(list, i) else { continue }
@@ -178,9 +211,11 @@ final class MultitouchMonitor {
 private let contactCallback: MTContactCallbackFunction = { device, touches, count, _, _ in
     var n = 0
     var sx = 0.0, sy = 0.0
-    if let touches = touches {
+    var valid = (0...TouchCheck.maxContacts).contains(count)
+    if valid, let touches = touches {
         for i in 0..<Int(count) {
             let t = touches[i]
+            guard TouchCheck.plausible(t) else { valid = false; break }
             if t.state == 4 || t.state == 5 {
                 n += 1
                 sx += Double(t.normalized.position.x)
@@ -192,9 +227,10 @@ private let contactCallback: MTContactCallbackFunction = { device, touches, coun
                            count: n,
                            x: n > 0 ? sx / Double(n) : 0,
                            y: n > 0 ? sy / Double(n) : 0,
-                           raw: Int(count), time: CACurrentMediaTime())
+                           raw: Int(count), time: CACurrentMediaTime(), valid: valid)
     DispatchQueue.main.async {
         let monitor = MultitouchMonitor.shared
+        guard monitor.check(frame) else { return }
         if frame.time > 0 { monitor.noteLag(CACurrentMediaTime() - frame.time) }
         if frame.count > 0 { monitor.lastTouchedDevice = frame.device }
         monitor.onFrame?(frame)

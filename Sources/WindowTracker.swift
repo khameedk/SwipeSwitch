@@ -1,6 +1,20 @@
 import AppKit
 import ApplicationServices
 
+/// Checked conversions for values Accessibility hands back as plain CFTypeRef. (`as?` can't check Core Foundation
+/// types, it always succeeds, so this compares the type ID instead.)
+enum AX {
+    static func element(_ value: CFTypeRef?) -> AXUIElement? {
+        guard let value, CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
+        return (value as! AXUIElement)   // checked just above
+    }
+    /// An array of elements (anything in it that isn't an element is dropped), or nil if it isn't an array.
+    static func elements(_ value: CFTypeRef?) -> [AXUIElement]? {
+        guard let value, CFGetTypeID(value) == CFArrayGetTypeID() else { return nil }
+        return (value as! [AnyObject]).compactMap { element($0) }   // checked just above
+    }
+}
+
 /// Private window-server / accessibility calls (looked up at runtime; everything degrades gracefully without them).
 enum PrivateAPI {
     private typealias GetWindowFn = @convention(c) (UnsafeRawPointer, UnsafeMutablePointer<CGWindowID>) -> AXError
@@ -62,8 +76,19 @@ enum PrivateAPI {
 
     /// Accessibility only lists windows on the current desktop. To reach a window on another desktop,
     /// probe the app's element IDs directly (the same technique other window switchers use).
+    /// Consecutive lookups in which no probed element turned out to be a window at all. That doesn't happen while the
+    /// token format is right (the app has at least the window being looked for), so a few in a row means macOS changed
+    /// it: then the lookup is turned off and Settings says so. Only touched on `Activator.axQueue`.
+    private static var emptyLookups = 0
+    private static let emptyLookupsToDisable = 3
+
     static func windowElementOnAnyDesktop(pid: pid_t, id target: CGWindowID) -> AXUIElement? {
-        guard let remoteToken else { return nil }
+        guard let remoteToken, !Health.has(.windowLookup) else { return nil }
+        var sawAnyWindow = false
+        defer {
+            emptyLookups = sawAnyWindow ? 0 : emptyLookups + 1
+            if emptyLookups >= emptyLookupsToDisable { Health.report(.windowLookup) }
+        }
         var token = Data(count: 20)
         token.withUnsafeMutableBytes { buf in
             buf.storeBytes(of: pid, toByteOffset: 0, as: pid_t.self)
@@ -76,7 +101,9 @@ enum PrivateAPI {
             let cfData = token as CFData
             guard let raw = remoteToken(Unmanaged.passUnretained(cfData).toOpaque()) else { continue }
             let el = Unmanaged<AXUIElement>.fromOpaque(raw).takeRetainedValue()
-            if windowID(of: el) == target { return el }
+            guard let id = windowID(of: el) else { continue }
+            sawAnyWindow = true
+            if id == target { return el }
             if CACurrentMediaTime() > deadline { break }
         }
         return nil
@@ -136,7 +163,7 @@ final class WindowTracker {
         nc.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] n in
             guard let self, let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
             self.forgetAppType(app.processIdentifier)
-            SessionLog.timed("watching \(app.localizedName ?? "?") for focus changes") {
+            SessionLog.timed("watching an app for focus changes", app: app.localizedName) {
                 self.ensureObserver(for: app, force: true)   // retry now in case it has finished launching
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { self.stampFocusedWindowSoon(of: app.processIdentifier) }
@@ -215,7 +242,7 @@ final class WindowTracker {
         Self.axReads.async {
             var win: CFTypeRef?
             if AXUIElementCopyAttributeValue(AXUIElementCreateApplication(pid), kAXFocusedWindowAttribute as CFString, &win) == .success, let win {
-                self.record(win as! AXUIElement, at: at)
+                if let w = AX.element(win) { self.record(w, at: at) }
             }
         }
     }
@@ -229,8 +256,8 @@ final class WindowTracker {
         let el = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(el, Float(Self.axBudget))
         var win: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(el, kAXFocusedWindowAttribute as CFString, &win) == .success, let win else { return }
-        let w = win as! AXUIElement
+        guard AXUIElementCopyAttributeValue(el, kAXFocusedWindowAttribute as CFString, &win) == .success,
+              let w = AX.element(win) else { return }
         AXUIElementSetMessagingTimeout(w, Float(Self.axBudget))
         guard let id = PrivateAPI.windowID(of: w) else { return }
         stamps[id] = CACurrentMediaTime()
@@ -255,7 +282,7 @@ final class WindowTracker {
         AXUIElementSetMessagingTimeout(el, Float(axBudget))
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(el, kAXWindowsAttribute as CFString, &value) == .success,
-              let list = value as? [AXUIElement] else { return nil }
+              let list = AX.elements(value) else { return nil }
         var out: [CGWindowID: AXInfo] = [:]
         for w in list {
             guard CACurrentMediaTime() < deadline else { return nil }   // partial info would hide windows; use none

@@ -354,16 +354,16 @@ final class SwitcherController {
         switch target {
         case .app(let app):
             targetApp = app
-            SessionLog.timed("activating \(app.localizedName ?? "?")") { Activator.activate(app) }
+            SessionLog.timed("activating the app", app: app.localizedName) { Activator.activate(app) }
         case .window(let w):
             targetApp = w.app
             targetWindow = w.id
             windows.noteActivated(w.id)
-            SessionLog.timed("activating a \(w.app.localizedName ?? "?") window") { Activator.activate(window: w) }
+            SessionLog.timed("activating a window", app: w.app.localizedName) { Activator.activate(window: w) }
         }
         FrontApp.switching(to: targetApp.processIdentifier)
         let name = targetApp.localizedName ?? "?"
-        SessionLog.note("commit: switching to \(name) (selected=\(index))")
+        SessionLog.note("commit: switching (selected=\(index))", app: name)
         // With diagnostics on, check that the switch actually landed (after the safety net has had its chance).
         guard SessionLog.enabled else { return }
         switchCount += 1
@@ -383,13 +383,13 @@ final class SwitcherController {
         if let wid = targetWindow, appOK {
             var focused: CFTypeRef?
             AXUIElementCopyAttributeValue(AXUIElementCreateApplication(targetApp.processIdentifier), kAXFocusedWindowAttribute as CFString, &focused)
-            let fid = focused.flatMap { PrivateAPI.windowID(of: $0 as! AXUIElement) }
+            let fid = AX.element(focused).flatMap { PrivateAPI.windowID(of: $0) }
             windowNote = fid == wid ? ", right window focused" : ", but a different window is focused"
         }
         if appOK {
-            SessionLog.note("result: switch to \(name) CONFIRMED\(windowNote)")
+            SessionLog.note("result: switch CONFIRMED\(windowNote)", app: name)
         } else {
-            SessionLog.problem("result: switch to \(name) FAILED, front is \(front?.localizedName ?? "?")")
+            SessionLog.problem("result: switch FAILED", app: name, front: front?.localizedName ?? "?")
         }
     }
 

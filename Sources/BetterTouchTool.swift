@@ -6,9 +6,8 @@ import CoreServices
 /// Does nothing unless the user turns it on and BTT is already running (we never launch BTT).
 ///
 /// The variable is set with BTT's AppleScript command, sent as an Apple Event straight to BTT. That needs a one-time
-/// macOS "control BetterTouchTool" permission. Without it we fall back to BTT's btt:// link, which works but goes
-/// through Launch Services; a link opened just as an app is being switched to can make macOS hand the front back to
-/// the previous app for a moment, so the switched-to window flickers.
+/// macOS "control BetterTouchTool" permission; without it nothing is sent. (There's deliberately no fallback to BTT's
+/// btt:// link: it would put the shared secret in a URL that any app can register to receive.)
 enum BetterTouchTool {
     static let variable = "swipeswitch_active"
     private static let bundleID = "com.hegenberg.BetterTouchTool"
@@ -33,15 +32,15 @@ enum BetterTouchTool {
         guard Prefs.bttIntegration, isRunning else { return }
         let value = active ? "1" : "0"
         if wait {
-            let secret = queue.sync { Prefs.bttSharedSecret }
-            let sent = queue.sync { permission(ask: false) == noErr && sendEvent(value: value, secret: secret) }
-            if !sent { openLink(value: value, secret: secret) }
+            queue.sync { if permission(ask: false) == noErr { _ = sendEvent(value: value, secret: Prefs.bttSharedSecret) } }
             return
         }
         queue.async {
-            let secret = Prefs.bttSharedSecret   // read here, off the main thread (it comes from the Keychain)
-            if permission(ask: true) == noErr, sendEvent(value: value, secret: secret) { return }
-            DispatchQueue.main.async { openLink(value: value, secret: secret) }
+            guard permission(ask: true) == noErr else {
+                SessionLog.problem("BTT: not allowed to control BetterTouchTool, so it wasn't told")
+                return
+            }
+            _ = sendEvent(value: value, secret: Prefs.bttSharedSecret)   // read here, off the main thread (Keychain)
         }
     }
 
@@ -69,7 +68,7 @@ enum BetterTouchTool {
             _ = try event.sendEvent(options: [.noReply], timeout: 1)
             return true
         } catch {
-            SessionLog.problem("BTT: Apple Event failed (\(error.localizedDescription)), using the btt:// link")
+            SessionLog.problem("BTT: Apple Event failed (\(error.localizedDescription))")
             return false
         }
     }
@@ -87,15 +86,5 @@ enum BetterTouchTool {
         if !secret.isEmpty { event.setParam(NSAppleEventDescriptor(string: secret), forKeyword: fourCC("btSs")) }
         let reply = try event.sendEvent(options: [.waitForReply], timeout: 10)
         return reply.paramDescriptor(forKeyword: keyDirectObject)?.stringValue ?? ""
-    }
-
-    private static func openLink(value: String, secret: String) {
-        var parts = URLComponents(string: "btt://set_string_variable/")!
-        parts.queryItems = [URLQueryItem(name: "variable_name", value: variable), URLQueryItem(name: "to", value: value)]
-        if !secret.isEmpty { parts.queryItems?.append(URLQueryItem(name: "shared_secret", value: secret)) }
-        guard let url = parts.url else { return }
-        let cfg = NSWorkspace.OpenConfiguration()
-        cfg.activates = false   // stay in the background
-        NSWorkspace.shared.open(url, configuration: cfg)
     }
 }

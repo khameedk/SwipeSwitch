@@ -28,6 +28,7 @@ enum Prefs {
         static let legacyStep = "stepDistance"
         static let activation = "activationMillimetres"
         static let bttIntegration = "bttIntegration"
+        /// Only used to delete a plain-text secret saved by versions before 1.3 (it's in the Keychain now).
         static let bttSharedSecret = "bttSharedSecret"
         static let keyboardTrigger = "keyboardTrigger"
         static let disabledSystemCommandTab = "disabledSystemCommandTab"
@@ -63,7 +64,6 @@ enum Prefs {
         Key.step: 8.0,
         Key.activation: 4.0,
         Key.bttIntegration: false,
-        Key.bttSharedSecret: "",
         Key.keyboardTrigger: false,
         Key.diagnosticLogging: false,
         Key.haptics: true,
@@ -114,7 +114,7 @@ enum Prefs {
     /// Finger travel that opens the switcher, in millimetres.
     static var keyboardTrigger: Bool { d.bool(forKey: Key.keyboardTrigger) }
     static var bttIntegration: Bool { d.bool(forKey: Key.bttIntegration) }
-    /// Kept in the Keychain (see BTTSecret); `Key.bttSharedSecret` is only read to move an old value there.
+    /// Kept in the Keychain (see BTTSecret).
     static var bttSharedSecret: String { BTTSecret.value }
     static var activationMillimetres: Double { min(max(d.double(forKey: Key.activation), 1), 30) }
     static var haptics: Bool { d.bool(forKey: Key.haptics) }

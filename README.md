@@ -202,11 +202,10 @@ The same Settings section shows how many of your BTT swipe gestures have the con
   the change took, and stops if anything looks different from what it expects (say, after a BTT update).
   Then add the condition by hand (see [Appendix: adding the BTT condition by hand](#appendix-adding-the-btt-condition-by-hand)).
 
-If you didn't click **OK**, SwipeSwitch can't add the conditions (add them by hand, see the
-[appendix](#appendix-adding-the-btt-condition-by-hand)) and falls back to BTT's
-[`btt://` links](https://docs.folivora.ai/docs/scripting/url-scheme/) for the variable. Those work too, but
-macOS delivers a link a moment late, which can make the window you switch to flicker. To change your answer
-later: System Settings › Privacy & Security › Automation › SwipeSwitch.
+If you didn't click **OK**, SwipeSwitch can't talk to BTT at all: it can't add the conditions or set the
+variable, so BTT gestures aren't paused. (It deliberately doesn't fall back to BTT's `btt://` links, which
+would put your shared secret in a URL that any app can register to receive.) To change your answer later:
+System Settings › Privacy & Security › Automation › SwipeSwitch.
 
 Notes:
 
@@ -238,25 +237,28 @@ What else it touches:
     It acts on Esc only, lets every other key through untouched, and stops listening as soon as the
     switcher closes.
   - *If you turn on "Open with ⌘Tab"*, it receives every key press so it can catch ⌘Tab before macOS
-    does. It acts only on ⌘Tab and the keys listed above while its switcher is open; every other key
-    passes straight through untouched.
+    does, and it can hold keys back: it holds back ⌘Tab, and while its ⌘Tab switcher is open, the keys
+    you press go to the switcher instead of the app in front. Every other key passes straight through
+    untouched. See [SECURITY.md](SECURITY.md#keyboard-tab-opt-in) for exactly what it does.
   - Nothing typed is stored or sent. With ⌘Tab off and no switcher on screen, it doesn't listen to the
     keyboard at all.
 - **Settings** are stored in macOS's normal preferences for the app (`io.github.khameedk.swipeswitch`),
   except the BTT shared secret, which is kept in your login Keychain.
 - **Window titles and focus order** are kept in memory while the app runs and are never written to disk.
 - **BetterTouchTool** (only if you turn that option on): SwipeSwitch tells BTT on your Mac whether the
-  switcher is open (by AppleScript command, or by `btt://` link if you didn't allow that), and adds or
+  switcher is open (by AppleScript command, sent straight to BTT), and adds or
   removes the condition on BTT's swipe gestures when you click Add or Remove. Nothing else is sent, and
   nothing leaves your Mac.
 - **Diagnostic log** (off by default, Settings › Diagnostics; turns itself off after an hour): records each switch (when it opened, how the
-  swipe ended, which app it switched to and whether it landed, and any step that was slow) in macOS's log
-  on your Mac. App names only: no keystrokes or window titles.
+  swipe ended, whether it landed, and any step that was slow) in macOS's log on your Mac. App names are
+  logged only as a hash; no keystrokes or window titles.
 - **Hardening:** the app runs with macOS's hardened runtime, so other programs can't load their code into
-  SwipeSwitch to borrow its permissions. Release builds contain no demo or test code (see
-  [Development](#development)).
+  SwipeSwitch to borrow its permissions, and has a single entitlement (Apple Events, for BTT). It isn't
+  sandboxed, because the sandbox doesn't allow controlling other apps' windows; see
+  [SECURITY.md](SECURITY.md#design-notes) for what stands in for it. Release builds contain no demo or test
+  code (see [Development](#development)).
 
-You can check all of this in the source: everything lives in [`Sources/`](Sources) (about 3,000 lines of Swift).
+You can check all of this in the source: everything lives in [`Sources/`](Sources) (about 3,300 lines of Swift).
 
 ### Security checks
 
@@ -264,17 +266,21 @@ Every change to this repo is checked automatically on GitHub:
 
 | Check | What it does |
 | --- | --- |
-| **Build** | Builds the app from exactly the code in the repo (and the `--dev` variant, so the test hooks keep compiling), then runs [`scripts/check-no-network.sh`](scripts/check-no-network.sh), which fails if the source contains networking code or the built app imports networking functions. |
+| **Build** | Builds the app from exactly the code in the repo (and the `--dev` variant, so the test hooks keep compiling), then runs [`scripts/check-no-network.sh`](scripts/check-no-network.sh), which fails if the source contains networking code or the built app imports networking functions, and [`scripts/check-hardening.sh`](scripts/check-hardening.sh), which fails if the app gains an entitlement or loses the hardened runtime, ASLR or stack protection. |
 | **CodeQL** | GitHub's code scanner looks for security problems in the Swift code (also weekly). |
-| **Semgrep** | A second scanner, mainly for the GitHub workflows (such as script injection), shell scripts and accidentally committed secrets (also weekly). |
+| **Semgrep** | A second scanner, mainly for the GitHub workflows (such as script injection), shell scripts and accidentally committed secrets (also weekly). A project rule ([`.semgrep/logging.yml`](.semgrep/logging.yml)) fails the check if a log message includes anything named like a window title, secret or app name. |
 | **OpenSSF Scorecard** | Rates the repo's security practices; the score is the badge at the top. |
-| **Release** | Tagged versions are built on GitHub, signed with the project's own code-signing certificate (so macOS keeps your permissions across updates and refuses anything else claiming to be SwipeSwitch), checked for networking code, and published with a checksum and a signed build-provenance record. |
+| **Release** | Tagged versions are built on GitHub with a pinned runner image and Xcode version, only from a tag on a commit that's on `main`. They're signed with the project's own code-signing certificate (so macOS keeps your permissions across updates and refuses anything else claiming to be SwipeSwitch), checked for networking code and hardening, and published with a checksum and a signed build-provenance record. |
 | **Dependabot** | Keeps the GitHub Actions used above up to date, waiting two weeks after each new version so a compromised release is usually caught first. The app itself has no third-party dependencies. |
 
-You can run the network check yourself after building:
+You can run both checks yourself after building:
 
 ```bash
 ./scripts/check-no-network.sh build/SwipeSwitch.app/Contents/MacOS/SwipeSwitch
+```
+
+```bash
+./scripts/check-hardening.sh build/SwipeSwitch.app
 ```
 
 These checks look for bugs and unexpected network access; they can't prove intent. The best
@@ -291,12 +297,17 @@ window switchers do:
 - switching off macOS's own ⌘Tab while the keyboard option is on (restored when you turn it off or quit)
 
 These are looked up at runtime, and the app falls back gracefully if one is missing. A future macOS
-update could still change them, so if something stops working after an update, please open an issue.
+update could still change them. Where SwipeSwitch can tell (trackpad data that no longer makes sense, or
+macOS refusing the lookup for windows on other desktops), it turns that feature off rather than guess, and
+shows a warning in its menu and in Settings › Status. If that happens, or something else stops working
+after an update, please open an issue. [SECURITY.md](SECURITY.md#private-macos-interfaces) lists each
+function and what happens without it.
 
 ## Troubleshooting
 
 - **Nothing happens when I swipe.** Check the menu bar icon: "Enabled" should be ticked, and the menu
-  shows "No trackpad detected" if SwipeSwitch can't see one. Look for a gesture-conflict warning in
+  shows "No trackpad detected" if SwipeSwitch can't see one, or "Swipes Off: Trackpad Data Not Recognized"
+  if a macOS update changed the trackpad data it reads (then check for a SwipeSwitch update). Look for a gesture-conflict warning in
   Settings › Gesture.
 - **The switcher opens but doesn't switch apps.** Grant Accessibility access (Settings › Status shows
   whether it's granted). If it's already on, remove SwipeSwitch from the Accessibility list and add it again.
@@ -308,7 +319,8 @@ update could still change them, so if something stops working after an update, p
   /usr/bin/log show --last 10m --predicate 'subsystem == "io.github.khameedk.swipeswitch"'
   ```
   Each switch ends with `CONFIRMED` or `FAILED`, and lines starting `slow:` show anything that held
-  SwipeSwitch up. Logging turns itself off after an hour.
+  SwipeSwitch up. App names show only as hashes (`[app <mask.hash: …>]`), so if you share the log, say
+  which apps you were switching between. Logging turns itself off after an hour.
 - **It stopped responding after waking from sleep.** SwipeSwitch reconnects to the trackpad after
   waking on its own; if it still doesn't respond, quit it from the menu bar icon and open it again.
 - **The menu bar icon is missing** on a Mac with a notch. macOS hides icons behind the notch when the

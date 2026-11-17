@@ -22,7 +22,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Prefs.register()
-        BTTSecret.preload()   // also moves a secret saved by an earlier version out of preferences
+        BTTSecret.deletePlainTextCopy()
+        BTTSecret.sync()   // reads the secret in the background if the BetterTouchTool option is on
         tracker = AppTracker()
         windowTracker = WindowTracker()
         switcher = SwitcherController(apps: tracker, windows: windowTracker)
@@ -68,6 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         keyboard.isGestureActive = { [weak self] in self?.recognizer.isActive ?? false }
         keyboard.apply()
         NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            BTTSecret.sync()   // the BetterTouchTool option may have been turned on or off
             guard let self = self, Prefs.keyboardTrigger != self.keyboard.isRunning else { return }
             self.keyboard.apply()
         }
@@ -218,7 +220,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         menu.addItem(.separator())
 
-        if MultitouchMonitor.shared.deviceCount == 0 {
+        for issue in Health.current {
+            let item = NSMenuItem(title: issue.menuLabel, action: #selector(openSettings), keyEquivalent: "")
+            item.target = self
+            item.image = NSImage(systemSymbolName: "exclamationmark.triangle.fill", accessibilityDescription: "Warning")
+            menu.addItem(item)
+        }
+        if MultitouchMonitor.shared.deviceCount == 0, !Health.has(.touchData) {
             let none = NSMenuItem(title: "No trackpad detected", action: nil, keyEquivalent: "")
             none.isEnabled = false
             menu.addItem(none)
