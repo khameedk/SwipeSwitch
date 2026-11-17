@@ -131,3 +131,11 @@ Every change is built on GitHub and checked for networking code and hardening, s
 Semgrep (including the logging rule above), and rated by OpenSSF Scorecard. Releases are built with a pinned
 runner image and Xcode version, only from a tag on a commit that's on `main`. See
 [Security checks](README.md#security-checks).
+
+The repository settings back this up:
+
+- **`main`** can't be deleted or force-pushed.
+- **Version tags** (`v*`) can only be created, moved or deleted by the maintainer, so nobody else can start
+  a release or point an existing version at different code.
+- **Releases are immutable:** once one is published, its files and its tag can't be changed, so a
+  download always matches the checksum and build record published with it.
