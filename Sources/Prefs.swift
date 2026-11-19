@@ -6,7 +6,7 @@ enum Layout: String { case grid, row }
 enum AppearSpeed: String {
     case instant, quick, smooth
     /// Seconds for the fade out (the fade in is set in SwitcherController.begin).
-    var hideDuration: Double { switch self { case .instant: return 0; case .quick: return 0.08; case .smooth: return 0.12 } }
+    var hideDuration: Double { switch self { case .instant: return 0; case .quick: return 0.05; case .smooth: return 0.08 } }
 }
 enum SwipeDirection: String { case right, left }
 enum SwitchMode: String { case apps, windows }

@@ -166,7 +166,8 @@ final class SwitcherPanel: NSPanel {
 
 final class SwitcherController {
     let model = SwitcherModel()
-    private let panel = SwitcherPanel()
+    /// Replaced if macOS stops putting it on screen (see `checkOnScreen`).
+    private var panel = SwitcherPanel()
     private let apps: AppTracker
     private let windows: WindowTracker
     private var generation = 0
@@ -180,6 +181,53 @@ final class SwitcherController {
         self.apps = apps
         self.windows = windows
         panel.contentView = NSHostingView(rootView: SwitcherView(model: model))
+    }
+
+    /// macOS once left the overlay off screen even though it was brought to the front, for every open until the app
+    /// was relaunched (after waking from sleep; cause unknown). So shortly after opening, ask the window server
+    /// whether the window really is on screen, and if not, replace it with a new one and show that instead.
+    /// The query is about this app's own window, so it needs no permission; it takes well under a millisecond, off
+    /// the main thread. Fast enough to run before even a quick flick has ended.
+    private static let onScreenCheckDelay = 0.05
+
+    private func checkOnScreen(gen: Int, afterRebuild: Bool = false) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.onScreenCheckDelay) { [weak self] in
+            guard let self, gen == self.generation, self.isShowing else { return }
+            // No window number yet (never shown): the window server can't have it on screen.
+            guard let window = CGWindowID(exactly: self.panel.windowNumber), window > 0 else {
+                self.notOnScreen(gen: gen, known: false, afterRebuild: afterRebuild)
+                return
+            }
+            DispatchQueue.global(qos: .userInitiated).async {
+                let info = (CGWindowListCopyWindowInfo([.optionIncludingWindow], window) as? [[String: Any]])?.first
+                guard info?[kCGWindowIsOnscreen as String] as? Bool != true else { return }
+                DispatchQueue.main.async { self.notOnScreen(gen: gen, known: info != nil, afterRebuild: afterRebuild) }
+            }
+        }
+    }
+
+    private func notOnScreen(gen: Int, known: Bool, afterRebuild: Bool) {
+        guard gen == generation, isShowing else { return }   // closed meanwhile: off screen on purpose
+        let state = "known=\(known) visible=\(panel.isVisible) activeSpace=\(panel.isOnActiveSpace) "
+            + "occlusion=\(panel.occlusionState.rawValue) alpha=\(panel.alphaValue) frame=\(panel.frame)"
+        if afterRebuild {
+            // Don't keep rebuilding: switching still works without the overlay.
+            NSLog("SwipeSwitch: overlay still not on screen after replacing it (\(state))")
+            SessionLog.problem("overlay still not on screen after replacing it (\(state))")
+            return
+        }
+        NSLog("SwipeSwitch: overlay not on screen after opening (\(state)); replacing it")
+        SessionLog.problem("overlay not on screen after opening (\(state)); replacing it")
+        let old = panel
+        panel = SwitcherPanel()
+        panel.appearance = old.appearance
+        panel.contentView = NSHostingView(rootView: SwitcherView(model: model))
+        panel.setFrame(old.frame, display: false)
+        old.orderOut(nil)
+        old.contentView = nil
+        panel.alphaValue = 1
+        panel.orderFrontRegardless()
+        checkOnScreen(gen: gen, afterRebuild: true)
     }
 
     private func makeItems() -> (items: [SwitchItem], currentIndex: Int?) {
@@ -308,15 +356,22 @@ final class SwitcherController {
 
         generation += 1
         panel.alphaValue = 1
-        panel.orderFrontRegardless()
+        #if SWIPESWITCH_DEV
+        // Test hook: leave the window off screen, as macOS once did, to exercise `checkOnScreen`.
+        let stuck = ProcessInfo.processInfo.environment["SWIPESWITCH_STUCK_OVERLAY"] != nil
+        #else
+        let stuck = false
+        #endif
+        if !stuck { panel.orderFrontRegardless() }
         if speed != .instant {
-            let animation: Animation = speed == .quick ? .easeOut(duration: 0.09) : .spring(response: 0.22, dampingFraction: 0.9)
+            let animation: Animation = speed == .quick ? .easeOut(duration: 0.05) : .spring(response: 0.14, dampingFraction: 0.9)
             DispatchQueue.main.async { withAnimation(animation) { self.model.appeared = true } }
         }
         let gen = generation
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { if gen == self.generation { self.panel.invalidateShadow() } }
         isShowing = true
         shownAt = CACurrentMediaTime()
+        checkOnScreen(gen: gen)
         SessionLog.note("opened via \(haptics ? "swipe" : "keys") mode=\(Prefs.mode.rawValue) items=\(items.count) current=\(currentIndex ?? -1) selected=\(self.model.selected)")
         BetterTouchTool.setActive(true)
         haptic()
@@ -335,7 +390,7 @@ final class SwitcherController {
         }
         guard i != model.selected else { return }
         SessionLog.note("step (\(dx),\(dy)) -> selected=\(i)")
-        withAnimation(.spring(response: 0.26, dampingFraction: 0.82)) { model.selected = i }
+        withAnimation(.spring(response: 0.18, dampingFraction: 0.85)) { model.selected = i }
         haptic()
     }
 
